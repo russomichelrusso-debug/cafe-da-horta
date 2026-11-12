@@ -67,6 +67,7 @@ const UI = {
         ${cont ? `<button class="btn big" data-act="start" data-arg="1">Continuar · Dia ${s.day}</button>` : ''}
         <button class="btn big ${cont ? 'ghost' : ''}" data-act="start" data-arg="0">${cont ? 'Novo jogo' : 'Jogar'}</button>
         <p class="hint">Plante, colha, prepare os pedidos e cuide da Jade.<br>Perca 3 clientes e o dia termina!</p>
+        <a class="proto-link" href="prototipo-3d/">🧊 Ver protótipo 3D</a>
       </div>`;
   },
 

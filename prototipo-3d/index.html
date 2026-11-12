@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2f6b3a">
+<title>Café da Horta 3D</title>
+<style>
+  :root { --verde: #2f6b3a; --vinho: #8c2738; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe6ff; font-family: "Trebuchet MS", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  canvas { display: block; touch-action: none; }
+  .bar { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; align-items: center; pointer-events: none; }
+  .bar > * { pointer-events: auto; }
+  #top { top: max(10px, env(safe-area-inset-top)); justify-content: space-between; }
+  #bottom { bottom: max(10px, env(safe-area-inset-bottom)); justify-content: center; }
+  a, button { font: inherit; font-weight: 800; border: 0; border-radius: 12px; padding: 9px 14px; background: #fff; color: #3b2a1e;
+    box-shadow: 0 3px 0 rgba(0,0,0,.18); text-decoration: none; font-size: 15px; cursor: pointer; }
+  button.on { background: #f2b33d; }
+  #fps { background: rgba(0,0,0,.55); color: #fff; padding: 4px 10px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+  #title { color: #fff; background: var(--verde); padding: 6px 14px; border-radius: 12px; font-weight: 900; }
+  #hint { position: fixed; left: 50%; bottom: max(62px, calc(env(safe-area-inset-bottom) + 54px)); transform: translateX(-50%);
+    background: rgba(255,255,255,.9); padding: 6px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; white-space: nowrap; transition: opacity .6s; }
+  .say { position: fixed; background: #fff; padding: 6px 12px; border-radius: 14px; font-weight: 900; box-shadow: 0 3px 8px rgba(0,0,0,.25);
+    transform: translate(-50%, -100%); pointer-events: none; animation: pop 1.2s forwards; }
+  @keyframes pop { 0% { opacity: 0; margin-top: 10px; } 15%, 75% { opacity: 1; margin-top: 0; } 100% { opacity: 0; margin-top: -20px; } }
+</style>
+</head>
+<body>
+<div id="top" class="bar">
+  <a href="../">← Voltar ao jogo</a>
+  <span id="fps">-- fps</span>
+</div>
+<div id="hint">Toque na Jade ou na Maria Alice · arraste para girar</div>
+<div id="bottom" class="bar">
+  <button data-view="cozinha">🔪 Cozinha</button>
+  <button data-view="balcao" class="on">🧾 Balcão</button>
+  <button data-view="horta">🌱 Horta</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+// ===== Renderizador (limitado para o iPhone: pixelRatio máx. 2, uma luz com sombra) =====
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#bfe6ff');
+scene.fog = new THREE.Fog('#bfe6ff', 20, 38);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+
+// ===== Materiais "toon" (sombreado em 3 faixas, visual de desenho) =====
+const grad = new THREE.DataTexture(new Uint8Array([120, 195, 255]), 3, 1, THREE.RedFormat);
+grad.minFilter = grad.magFilter = THREE.NearestFilter;
+grad.needsUpdate = true;
+const mats = {};
+const M = c => mats[c] || (mats[c] = new THREE.MeshToonMaterial({ color: c, gradientMap: grad }));
+
+const sph = (r, w = 24, h = 16) => new THREE.SphereGeometry(r, w, h);
+const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const cyl = (rt, rb, h, s = 24) => new THREE.CylinderGeometry(rt, rb, h, s);
+const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 6, 16);
+const cone = (r, h) => new THREE.ConeGeometry(r, h, 16);
+
+function mesh(geo, color, x = 0, y = 0, z = 0, o = {}) {
+  const m = new THREE.Mesh(geo, typeof color === 'string' ? M(color) : color);
+  m.position.set(x, y, z);
+  if (o.s) m.scale.set(...o.s);
+  if (o.r) m.rotation.set(...o.r);
+  m.castShadow = o.cast !== false;
+  m.receiveShadow = !!o.recv;
+  (o.p || scene).add(m);
+  return m;
+}
+const group = (x, y, z, parent = scene) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+
+// ===== Luzes =====
+scene.add(new THREE.HemisphereLight('#ffffff', '#c9a37a', 1.7));
+const sun = new THREE.DirectionalLight('#fff3df', 2.4);
+sun.position.set(5, 10, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 9, bottom: -9, near: 1, far: 30 });
+sun.shadow.normalBias = 0.03;
+scene.add(sun);
+
+// ===== Cenário: café =====
+mesh(box(13, 0.2, 10), '#e7cfa6', -1.5, -0.1, 0, { recv: true, cast: false });            // piso
+for (let i = 0; i < 6; i++) mesh(box(0.04, 0.01, 10), '#d8bb8c', -7.5 + i * 2.2, 0.005, 0, { cast: false }); // tábuas
+mesh(box(12.5, 4.6, 0.25), '#f7e6c8', -1.75, 2.3, -3, { recv: true });                      // parede
+mesh(box(12.5, 0.6, 0.32), '#c98a4b', -1.75, 0.3, -2.95, { recv: true });                    // rodapé
+mesh(box(0.25, 4.6, 10), '#f3dfbd', -8.1, 2.3, 2, { recv: true });                            // parede lateral
+mesh(box(2.2, 1.5, 0.1), '#ffffff', 2.6, 2.6, -2.85);                                       // janela
+mesh(box(1.9, 1.2, 0.12), '#d6f1ff', 2.6, 2.6, -2.82, { cast: false });
+mesh(box(0.06, 1.2, 0.14), '#ffffff', 2.6, 2.6, -2.8, { cast: false });
+
+// placa com o nome (textura desenhada num canvas)
+function textTexture(text, bg, fg, w = 512, h = 128, size = 64) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = bg; g.beginPath(); g.roundRect(0, 0, w, h, 28); g.fill();
+  g.fillStyle = fg; g.font = `900 ${size}px "Trebuchet MS", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, w / 2, h / 2 + 4);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.75), new THREE.MeshBasicMaterial({ map: textTexture('Café da Horta', '#2f6b3a', '#ffffff'), transparent: true }));
+sign.position.set(-0.6, 3.7, -2.85); scene.add(sign);
+
+// prateleira com vasinhos
+mesh(box(2.2, 0.1, 0.45), '#9a6331', -3.6, 2.5, -2.72);
+[['#5fb548', -4.3], ['#e3304a', -3.6], ['#f28a1c', -2.9]].forEach(([c, x]) => {
+  mesh(cyl(0.16, 0.12, 0.25), '#c96a3a', x, 2.68, -2.7);
+  mesh(sph(0.17), c, x, 2.92, -2.7, { s: [1, 0.8, 1] });
+});
+
+// balcão
+mesh(box(5, 1.1, 1.1), '#c98a4b', 0, 0.55, 0, { recv: true });
+mesh(box(5.2, 0.12, 1.3), '#8a5a30', 0, 1.16, 0, { recv: true });
+for (let i = 0; i < 5; i++) mesh(box(0.05, 0.9, 0.02), '#b57a3f', -2 + i, 0.5, 0.56, { cast: false });
+const TOP = 1.22;
+
+// prato com sanduíche montado
+mesh(cyl(0.34, 0.28, 0.04, 32), '#ffffff', -0.15, TOP + 0.02, 0.2);
+[['#f3d39a', 0.07, 0.44], ['#5fb548', 0.035, 0.5], ['#e5412f', 0.04, 0.42], ['#f9d95e', 0.03, 0.46], ['#f3d39a', 0.07, 0.44]]
+  .reduce((y, [c, h, w]) => { mesh(box(w, h, w * 0.85), c, -0.15, y + h / 2, 0.2); return y + h; }, TOP + 0.045);
+
+// liquidificador com suco
+mesh(box(0.34, 0.22, 0.34), '#8e5bd6', -1.9, TOP + 0.11, 0.25);
+const jar = new THREE.MeshToonMaterial({ color: '#dff4ff', gradientMap: grad, transparent: true, opacity: 0.45 });
+mesh(cyl(0.15, 0.12, 0.5), jar, -1.9, TOP + 0.47, 0.25, { cast: false });
+mesh(cyl(0.13, 0.11, 0.3), '#f7a01c', -1.9, TOP + 0.38, 0.25, { cast: false });
+
+// sininho
+mesh(new THREE.SphereGeometry(0.13, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), '#f2c14e', 1.9, TOP, 0.3);
+mesh(sph(0.03), '#c9962b', 1.9, TOP + 0.14, 0.3);
+
+// ===== Maria Alice (formas simples) =====
+const maria = group(-1.0, 0, -1.05);
+const P = { p: maria };
+mesh(cyl(0.32, 0.6, 1.5, 28), '#8c2738', 0, 0.95, 0, P);                       // vestido
+mesh(box(0.56, 0.75, 0.04), '#fffaf3', 0, 1.15, 0.42, { ...P, r: [-0.18, 0, 0] }); // avental
+mesh(box(0.36, 0.32, 0.04), '#fffaf3', 0, 1.55, 0.35, { ...P, r: [-0.1, 0, 0] });
+mesh(sph(0.05), '#e35d6a', 0, 1.56, 0.38, { ...P, s: [1, 0.9, 0.4] });          // coraçãozinho
+const armL = group(-0.36, 1.68, 0.02, maria), armR = group(0.36, 1.68, 0.02, maria);
+mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armL });
+mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armR });
+armL.rotation.z = -0.25; armR.rotation.z = 0.25;
+mesh(cyl(0.1, 0.12, 0.22), '#efc3a4', 0, 1.8, 0, P);                            // pescoço
+const head = group(0, 2.22, 0, maria);
+const H = { p: head };
+mesh(sph(0.42, 32, 24), '#f6d2b8', 0, 0, 0, H);
+// cabelo castanho ondulado
+mesh(cap(0.4, 0.55), '#5b3a25', 0, -0.4, -0.2, { ...H, s: [1.15, 1, 0.6] });
+mesh(new THREE.SphereGeometry(0.445, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52), '#5b3a25', 0, 0.02, -0.02, { ...H, r: [-0.38, 0, 0] });
+mesh(sph(0.2), '#6b4329', -0.1, 0.3, 0.28, { ...H, s: [1.7, 0.55, 0.7], r: [0.3, 0, 0.35] });   // franja
+for (const sx of [-1, 1]) {
+  mesh(cap(0.12, 0.75), '#5b3a25', sx * 0.4, -0.38, 0.02, { ...H, r: [0, 0, sx * 0.08] });
+  mesh(sph(0.11), '#5b3a25', sx * 0.43, -0.82, 0.04, H);                        // pontas onduladas
+}
+// rosto
+const eyes = [];
+for (const sx of [-1, 1]) {
+  const e = group(sx * 0.15, 0.0, 0.37, head);
+  mesh(sph(0.085), '#ffffff', 0, 0, 0, { p: e, s: [1, 1.15, 0.5], cast: false });
+  mesh(sph(0.06), '#7a4524', 0, -0.005, 0.03, { p: e, s: [1, 1.1, 0.5], cast: false });
+  mesh(sph(0.032), '#1d120b', 0, -0.005, 0.05, { p: e, cast: false });
+  mesh(sph(0.017), '#ffffff', 0.022, 0.03, 0.07, { p: e, cast: false });
+  eyes.push(e);
+  mesh(box(0.15, 0.028, 0.03), '#3b2416', sx * 0.15, 0.16, 0.38, { ...H, r: [0, 0, -sx * 0.12], cast: false }); // sobrancelhas
+  mesh(sph(0.06), '#f3a1a0', sx * 0.25, -0.12, 0.31, { ...H, s: [1.3, 0.7, 0.3], cast: false });            // bochechas
+}
+mesh(sph(0.03), '#efbf9f', 0, -0.08, 0.42, { ...H, cast: false });                                          // nariz
+mesh(new THREE.TorusGeometry(0.07, 0.014, 8, 20, Math.PI), '#b5485a', 0, -0.17, 0.385, { ...H, r: [-0.15, 0, Math.PI], cast: false }); // sorriso
+
+// ===== Jade (porquinha-da-índia laranja com faixa branca) =====
+const jade = group(0.7, TOP, 0.2);
+jade.rotation.y = 0.35;
+jade.scale.setScalar(1.3);
+const jBody = group(0, 0, 0, jade);
+const J = { p: jBody };
+mesh(sph(0.3), '#d9822b', 0, 0.25, -0.05, { ...J, s: [1, 0.82, 1.35] });
+mesh(sph(0.24), '#de8a33', 0, 0.3, 0.3, { ...J, s: [1.05, 0.95, 1] });
+mesh(sph(0.1), '#fff6ea', 0, 0.37, 0.49, { ...J, s: [0.55, 1.6, 0.6], r: [0.45, 0, 0] });   // faixa branca
+mesh(sph(0.1), '#fff6ea', 0, 0.24, 0.5, { ...J, s: [1.3, 0.8, 0.8] });                     // focinho
+mesh(sph(0.16), '#fff6ea', 0, 0.13, 0.36, { ...J, s: [1.2, 0.9, 0.7] });                   // peito
+for (const sx of [-1, 1]) {
+  mesh(sph(0.08), '#c2611f', sx * 0.17, 0.5, 0.22, { ...J, s: [1.2, 0.6, 0.9], r: [0, 0, sx * 0.5] });   // orelhas
+  mesh(sph(0.045), '#1d120b', sx * 0.13, 0.36, 0.47, { ...J, cast: false });                                // olhos
+  mesh(sph(0.014), '#ffffff', sx * 0.13 + 0.012, 0.38, 0.505, { ...J, cast: false });
+  mesh(sph(0.05), '#f1a9a0', sx * 0.15, 0.02, 0.25, { ...J, s: [1, 0.5, 1.3] });                           // patinhas
+  mesh(sph(0.05), '#f1a9a0', sx * 0.15, 0.02, -0.32, { ...J, s: [1, 0.5, 1.3] });
+}
+mesh(sph(0.025), '#e9888f', 0, 0.28, 0.585, { ...J, cast: false });                                         // nariz
+// bigodes
+const wPts = [];
+for (const sx of [-1, 1]) for (const dy of [-0.02, 0.02]) wPts.push(sx * 0.06, 0.26 + dy, 0.56, sx * 0.3, 0.26 + dy * 3, 0.5);
+const whisk = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wPts, 3)),
+  new THREE.LineBasicMaterial({ color: '#f7ead8' }));
+jBody.add(whisk);
+// lacinho (exemplo de acessório da loja)
+for (const sx of [-1, 1]) mesh(cone(0.06, 0.12), '#ff6fa5', 0.2 + sx * 0.06, 0.56, 0.18, { ...J, r: [0, 0, sx * Math.PI / 2] });
+mesh(sph(0.03), '#e0457f', 0.2, 0.56, 0.18, J);
+
+// ===== Clientes na frente do balcão =====
+function customer(x, z, shirt, hair, skin, rotY) {
+  const g = group(x, 0, z);
+  g.rotation.y = rotY;
+  mesh(cap(0.3, 0.7), shirt, 0, 0.75, 0, { p: g });
+  mesh(sph(0.3), skin, 0, 1.55, 0, { p: g });
+  mesh(new THREE.SphereGeometry(0.315, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 1.57, -0.02, { p: g, r: [-0.3, 0, 0] });
+  return g;
+}
+const c1 = customer(2.1, 1.25, '#3f7fd1', '#2b1a10', '#e8b48f', Math.PI - 0.5);
+customer(3.2, 1.6, '#3aa76d', '#e2b55a', '#f6d2b8', Math.PI - 0.8);
+// balão "Anotar pedido" (sprite sempre virado para a câmera)
+const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Anotar pedido', '#f2b33d', '#3b2a1e', 512, 128, 56) }));
+bubble.scale.set(1.2, 0.3, 1);
+bubble.position.set(2.1, 2.25, 1.25);
+scene.add(bubble);
+
+// ===== Cozinha (preparo) =====
+const kx = -5.4;
+mesh(box(2.4, 1, 1.4), '#c98a4b', kx, 0.5, 0, { recv: true });
+mesh(box(2.5, 0.08, 1.5), '#e9eef1', kx, 1.03, 0, { recv: true });
+mesh(box(1.1, 0.06, 0.7), '#d9a66b', kx, 1.1, 0.1, { recv: true });                     // tábua
+mesh(sph(0.17), '#e5412f', kx - 0.25, 1.28, 0.1);                                       // tomate
+mesh(cone(0.06, 0.06), '#3e9a3a', kx - 0.25, 1.46, 0.1);
+for (let i = 0; i < 3; i++) mesh(cyl(0.14, 0.14, 0.03), '#f2665a', kx + 0.15 + i * 0.11, 1.15 + i * 0.012, 0.15, { r: [0, 0, -0.4] });
+const knife = group(kx + 0.25, 1.15, 0.45);
+knife.rotation.y = 0.4;
+mesh(box(0.5, 0.02, 0.09), '#d8dde2', 0, 0, 0, { p: knife });
+mesh(box(0.22, 0.05, 0.07), '#2fa37a', 0.35, 0, 0, { p: knife });
+mesh(box(1.1, 2.3, 0.8), '#eef5f8', kx - 1.8, 1.15, -2.3, { recv: true });               // geladeira
+mesh(box(0.05, 0.6, 0.05), '#9fb3bf', kx - 1.35, 1.5, -1.88);
+mesh(box(1.6, 0.9, 0.8), '#d1495b', kx + 1.2, 0.45, -2.4);                               // fogão
+mesh(box(1.6, 0.06, 0.8), '#3b3b3b', kx + 1.2, 0.93, -2.4);
+mesh(cyl(0.22, 0.2, 0.25), '#b8c3cc', kx + 0.9, 1.08, -2.4);                             // panela
+
+// ===== Horta =====
+mesh(box(10, 0.2, 12), '#8bcf6a', 10, -0.12, 0, { recv: true, cast: false });
+for (let i = 0; i < 8; i++) mesh(box(0.12, 0.8, 0.12), '#fffaf3', 5.4 + i * 1.3, 0.4, -3.2);   // cerca
+mesh(box(9.2, 0.08, 0.06), '#fffaf3', 9.95, 0.6, -3.2);
+for (const [x, z, s] of [[12.5, -5, 1.2], [7, -6, 1], [14.5, -2, 0.9]]) {                       // árvores
+  mesh(cyl(0.15, 0.2, 1.4), '#8a5a30', x, 0.7, z);
+  mesh(sph(0.9 * s), '#5aa845', x, 1.9 * s, z);
+}
+const plants = [];
+const plots = [[6.6, -1.2], [8.6, -1.2], [6.6, 1.0], [8.6, 1.0]];
+plots.forEach(([x, z]) => mesh(box(1.5, 0.25, 1.5), '#7a4f2c', x, 0.12, z, { recv: true }));
+// alface
+let g = group(6.6, 0.25, -1.2); plants.push(g);
+[[0, 0], [0.25, 0.15], [-0.25, 0.12], [0.1, -0.25], [-0.15, -0.2]].forEach(([x, z]) => mesh(sph(0.22), '#5fb548', x, 0.15, z, { p: g, s: [1, 0.7, 1] }));
+// cenouras
+g = group(8.6, 0.25, -1.2); plants.push(g);
+[[-0.35, 0], [0, 0.2], [0.35, -0.1]].forEach(([x, z]) => {
+  mesh(cone(0.09, 0.3), '#f28a1c', x, 0.05, z, { p: g, r: [Math.PI, 0, 0] });
+  for (const a of [-0.4, 0, 0.4]) mesh(cone(0.03, 0.35), '#4fa83d', x + a * 0.15, 0.35, z, { p: g, r: [0, 0, a] });
+});
+// tomateiro
+g = group(6.6, 0.25, 1.0); plants.push(g);
+mesh(cyl(0.03, 0.04, 1.0), '#4f8a3a', 0, 0.5, 0, { p: g });
+[[0.15, 0.5], [-0.15, 0.75], [0.12, 0.95]].forEach(([x, y]) => mesh(sph(0.16), '#4fa83d', x, y, 0, { p: g, s: [1.3, 0.6, 1] }));
+[[0.2, 0.4], [-0.18, 0.62], [0.05, 0.85]].forEach(([x, y]) => mesh(sph(0.1), '#e5412f', x, y, 0.12, { p: g }));
+// morangos
+g = group(8.6, 0.25, 1.0); plants.push(g);
+[[-0.3, 0], [0.3, 0.1], [0, -0.3]].forEach(([x, z]) => {
+  mesh(sph(0.2), '#4fa83d', x, 0.12, z, { p: g, s: [1.2, 0.55, 1.2] });
+  mesh(cone(0.07, 0.14), '#e3304a', x + 0.12, 0.08, z + 0.15, { p: g, r: [Math.PI, 0, 0] });
+});
+// regador
+const can = group(7.6, 0, 2.4);
+mesh(cyl(0.22, 0.25, 0.4), '#4aa3df', 0, 0.2, 0, { p: can });
+mesh(cyl(0.03, 0.04, 0.5), '#4aa3df', 0.3, 0.35, 0, { p: can, r: [0, 0, -0.9] });
+
+// ===== Câmeras de cada estação =====
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const VIEWS = {
+  balcao:  { pos: V(1.0, 2.9, 4.6),  tgt: V(0.1, 1.65, -0.3) },
+  cozinha: { pos: V(-3.6, 3.1, 3.6), tgt: V(-5.4, 1.0, -0.4) },
+  horta:   { pos: V(7.6, 3.8, 5.4),  tgt: V(7.6, 0.4, -0.2) },
+};
+let view = 'balcao', yaw = 0;
+const camTgt = VIEWS.balcao.tgt.clone(), camBase = VIEWS.balcao.pos.clone();
+window.__setView = v => { view = v; }; // usado em testes
+const UP = V(0, 1, 0);
+
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+  view = b.dataset.view; yaw = 0;
+  document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x === b));
+  sfx(520, 0.05);
+}));
+
+// ===== Toques: arrastar gira, toque rápido interage =====
+let down = null;
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerdown', e => { unlock(); down = { x: e.clientX, y: e.clientY, yaw, moved: false }; });
+addEventListener('pointermove', e => {
+  if (!down) return;
+  const dx = e.clientX - down.x;
+  if (Math.abs(dx) > 6) down.moved = true;
+  yaw = THREE.MathUtils.clamp(down.yaw - dx * 0.006, -0.8, 0.8);
+});
+addEventListener('pointerup', e => {
+  if (down && !down.moved) tap(e.clientX, e.clientY);
+  down = null;
+});
+function tap(x, y) {
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects([jade, maria], true)[0];
+  if (!hit) return;
+  let o = hit.object; while (o.parent && o !== jade && o !== maria) o = o.parent;
+  if (o === jade && jadeHop <= 0) { jadeHop = 1; say('Uiii!', jade, 0.9); sfx(1400, 0.09, 600); sfx(1700, 0.1, 500, 0.1); }
+  if (o === maria && wave <= 0) { wave = 1; say('Oi! Bem-vindo ao Café!', maria, 2.9); sfx(660, 0.08, 200); }
+  document.getElementById('hint').style.opacity = 0;
+}
+function say(text, obj, h) {
+  const p = obj.getWorldPosition(V(0, 0, 0)).add(V(0, h, 0)).project(camera);
+  const el = document.createElement('div');
+  el.className = 'say'; el.textContent = text;
+  el.style.left = ((p.x + 1) / 2 * innerWidth) + 'px';
+  el.style.top = ((1 - p.y) / 2 * innerHeight) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+// som simples (iOS libera depois do primeiro toque)
+let actx = null;
+function unlock() { if (!actx) try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} else if (actx.state === 'suspended') actx.resume(); }
+function sfx(f, d, slide = 0, delay = 0) {
+  if (!actx) return;
+  const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(f + slide, t + d);
+  g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + d + 0.02);
+}
+
+// ===== Animação =====
+let jadeHop = 0, wave = 0, blinkT = 2, last = performance.now(), frames = 0, fpsT = 0;
+const fpsEl = document.getElementById('fps');
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+
+  // câmera desliza até a estação escolhida
+  const v = VIEWS[view], k = 1 - Math.exp(-dt * 3);
+  camTgt.lerp(v.tgt, k); camBase.lerp(v.pos, k);
+  const off = camBase.clone().sub(camTgt).applyAxisAngle(UP, yaw + Math.sin(t * 0.25) * 0.05);
+  camera.position.copy(camTgt).add(off);
+  camera.lookAt(camTgt);
+
+  // Jade respira e pula quando tocada
+  jBody.scale.set(1, 1 + Math.sin(t * 3) * 0.025, 1);
+  if (jadeHop > 0) { jadeHop -= dt * 1.6; jade.position.y = TOP + Math.max(0, Math.sin((1 - jadeHop) * Math.PI)) * 0.35; }
+  // Maria balança e acena
+  maria.rotation.z = Math.sin(t * 1.2) * 0.015;
+  head.rotation.y = Math.sin(t * 0.7) * 0.12;
+  if (wave > 0) { wave -= dt * 0.7; armR.rotation.z = 0.25 + Math.sin((1 - wave) * Math.PI) * 2.3; armR.rotation.x = -Math.sin((1 - wave) * Math.PI * 6) * 0.25 * (wave > 0 ? 1 : 0); }
+  // piscar
+  blinkT -= dt;
+  const bl = blinkT < 0.12 ? 0.1 : 1;
+  for (const e of eyes) e.scale.y = bl;
+  if (blinkT < 0) blinkT = 2.5 + Math.random() * 2.5;
+  // balão do cliente e plantas ao vento
+  bubble.position.y = 2.25 + Math.sin(t * 3) * 0.04;
+  plants.forEach((p, i) => { p.rotation.z = Math.sin(t * 1.5 + i) * 0.04; });
+  c1.position.y = Math.abs(Math.sin(t * 2)) * 0.03;
+
+  renderer.render(scene, camera);
+
+  frames++; fpsT += dt;
+  if (fpsT >= 1) { fpsEl.textContent = `${Math.round(frames / fpsT)} fps`; frames = 0; fpsT = 0; }
+}
+renderer.setAnimationLoop(loop);
+
+// economiza bateria quando o app sai da tela
+document.addEventListener('visibilitychange', () => {
+  renderer.setAnimationLoop(document.hidden ? null : (last = performance.now(), loop));
+});
+function resize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 62 : 40;   // em pé, abre mais o campo de visão
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+setTimeout(() => { document.getElementById('hint').style.opacity = 0; }, 6000);
+</script>
+</body>
+</html>
