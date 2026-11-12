@@ -1,7 +1,7 @@
 'use strict';
 // ===== Lógica do jogo: estado, dia, clientes, horta, Jade, desgaste, salvamento =====
 
-const SAVE_KEY = 'cafe-da-horta-v1';
+const SAVE_KEY = window.SAVE_KEY_OVERRIDE || 'cafe-da-horta-v1'; // a versão 3D usa outro save
 const MAX_SPOTS = 3;     // clientes no balcão ao mesmo tempo
 const MAX_LOST = 3;      // clientes perdidos que encerram o dia
 

@@ -1,0 +1,50 @@
+/* ===== Versão 3D: o mundo 3D fica atrás, a interface HTML por cima ===== */
+html, body { background: #bfe6ff; }
+#world { position: fixed; left: 0; top: 0; z-index: 0; display: block; touch-action: none; }
+#wrap { z-index: 1; }
+#stage { background: transparent; }
+#station, .st-balcao, .st-preparo, .st-montagem, .st-horta, .st-jade { background: transparent !important; }
+.st-mercado { background: rgba(251, 239, 224, .93) !important; }
+
+/* os efeitos 2D de chuva/escuro viram efeitos 3D */
+#stage.raining #station::after, #stage.blackout #station::before { display: none; }
+
+/* Preparo: a tábua 3D aparece atrás do botão transparente */
+.board { background: rgba(255,255,255,.06) !important; border: 3px dashed rgba(255,255,255,.75) !important; color: #fff; text-shadow: 0 2px 3px rgba(0,0,0,.5); }
+.on-board, .knife { visibility: hidden; }
+.chops { color: #fff; }
+
+/* Montagem: o prato/tigela/liquidificador 3D aparece dentro da área de soltar */
+.drop { background: rgba(255,255,255,.08) !important; border-color: rgba(255,255,255,.8) !important; }
+.drop .plate, .drop .bowl, .drop .blender { visibility: hidden; }
+.drop-hint { color: #fff; opacity: .95 !important; text-shadow: 0 2px 3px rgba(0,0,0,.5); font-weight: 800; }
+.empty-st { background: rgba(223, 233, 239, .75) !important; }
+
+/* Jade: a Jade 3D fica no lugar da 2D (a área continua sendo o alvo de soltar comida) */
+.jade-home .hay, .jade-big svg { display: none; }
+.jade-side { background: rgba(255, 240, 245, .92); border-radius: 16px 0 0 16px; padding-left: 12px !important; }
+
+/* Horta: canteiros viram etiquetas sobre a horta 3D */
+.garden { display: none; }
+.garden-tip { position: absolute; left: 10px; right: 10px; bottom: 6px; background: rgba(255,255,255,.85); border-radius: 10px; padding: 4px 8px !important; }
+.seed-pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 260px; background: #fff; border-radius: 16px; padding: 10px;
+  display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.3); z-index: 9; }
+.seed-pop h4 { text-align: center; }
+
+/* Balcão */
+.st-balcao .banner { top: 8px; }
+
+/* ===== Etiquetas que acompanham os objetos 3D ===== */
+#labels { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 8; }
+.lbl { position: absolute; left: 0; top: 0; pointer-events: auto; will-change: transform; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: rgba(255,255,255,.92); border-radius: 12px; padding: 4px 8px 7px; box-shadow: 0 3px 8px rgba(0,0,0,.2); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.lbl .btn { padding: 5px 9px; font-size: 13px; }
+.lbl .btn .ic { width: 20px; height: 20px; }
+.lbl.vip { background: #fff3c4; outline: 2px solid #f2b33d; }
+.lbar { display: block; width: 84px; height: 6px; background: #e4e4e4; border-radius: 3px; overflow: hidden; }
+.lbar i { display: block; height: 100%; transform-origin: 0 50%; background: #4cbf5a; }
+.lbar.low i { background: #e35d5d; }
+.lbar.water i { background: #4aa3df; } .lbar.grow i { background: #f2b33d; } .lbar.ripe i { background: #6cc04a; } .lbar.praga i { background: #d1495b; }
+.lbl.thirsty .btn { background: #4aa3df; color: #fff; animation: pulse .6s infinite alternate; }
+.lbl.alert .btn { background: #d1495b; color: #fff; animation: pulse .6s infinite alternate; }
+.lbl.ready .btn { background: #f2b33d; animation: pulse .8s infinite alternate; }

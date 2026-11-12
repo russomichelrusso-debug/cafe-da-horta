@@ -67,7 +67,7 @@ const UI = {
         ${cont ? `<button class="btn big" data-act="start" data-arg="1">Continuar · Dia ${s.day}</button>` : ''}
         <button class="btn big ${cont ? 'ghost' : ''}" data-act="start" data-arg="0">${cont ? 'Novo jogo' : 'Jogar'}</button>
         <p class="hint">Plante, colha, prepare os pedidos e cuide da Jade.<br>Perca 3 clientes e o dia termina!</p>
-        <a class="proto-link" href="prototipo-3d/">🧊 Ver protótipo 3D</a>
+        ${window.MODO_3D ? '<a class="proto-link" href="../">🎨 Jogar a versão 2D</a>' : '<a class="proto-link" href="3d/">🧊 Jogar em 3D (beta)</a>'}
       </div>`;
   },
 
@@ -622,6 +622,6 @@ window.addEventListener('DOMContentLoaded', () => {
   UI.init();
   requestAnimationFrame(frame);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register((window.MODO_3D ? '../' : '') + 'sw.js').catch(() => {});
   }
 });
