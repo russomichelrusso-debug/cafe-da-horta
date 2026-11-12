@@ -3,3 +3,5 @@
 *.jpeg
 # Configuração local do Claude
 .claude/
+# Pacotes baixados (os sons usados ficam em sons/)
+*.zip
