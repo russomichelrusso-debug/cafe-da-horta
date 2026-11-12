@@ -1,0 +1,5 @@
+# Fotos de referência (não publicar)
+*.jpg
+*.jpeg
+# Configuração local do Claude
+.claude/
