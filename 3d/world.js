@@ -233,56 +233,90 @@ mesh(sph(0.028, 10, 8), '#efbf9f', 0, -0.075, 0.41, { ...H, s: [1, 0.8, 1], cast
 const smile = mesh(new THREE.TorusGeometry(0.065, 0.014, 8, 20, Math.PI), '#b5485a', 0, -0.17, 0.375, { ...H, r: [-0.15, 0, Math.PI], cast: false });
 mesh(sph(0.03, 10, 8), '#e98a95', 0, -0.205, 0.37, { ...H, s: [1.3, 0.5, 0.5], cast: false });
 
-// ================= JADE =================
+// ================= JADE (baseada na foto PERSONAGENS.jpg) =================
+// Corpo e cabeça são UMA malha lisa (formato de pãozinho, como um porquinho-da-índia),
+// com as manchas brancas pintadas nos vértices: faixa no focinho que afina até a testa,
+// focinho/queixo/peito brancos e a parte de trás clara, como na foto.
 const JADE_POS = V(-2.0, TOP, 0.15);
 const jade = group(JADE_POS.x, JADE_POS.y, JADE_POS.z);
 jade.rotation.y = 0.55;
 jade.scale.setScalar(1.25);
 const jBody = group(0, 0, 0, jade);
 const J = { p: jBody };
-const OR = '#d9822b', OR2 = '#cf7524', ORL = '#e9a050', WH = '#fff6ea';
-ol(mesh(sph(0.3, 28, 18), OR, 0, 0.26, -0.05, { ...J, s: [1.05, 0.85, 1.38] }));
-mesh(sph(0.24, 20, 14), OR, 0, 0.25, -0.33, { ...J, s: [1.1, 0.95, 0.9] });                      // traseiro fofo
-mesh(sph(0.17, 16, 12), WH, 0, 0.16, 0.33, { ...J, s: [1.25, 1, 0.75] });                            // peito branco
-const jHead = group(0, 0, 0, jBody);
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function jadeBodyGeo() {
+  // perfil (raio, posição no eixo traseiro→nariz)
+  const prof = [[0.0, -0.44], [0.13, -0.42], [0.23, -0.36], [0.29, -0.24], [0.315, -0.1], [0.315, 0.04], [0.3, 0.15],
+    [0.285, 0.23], [0.27, 0.31], [0.245, 0.38], [0.2, 0.44], [0.13, 0.49], [0.05, 0.515], [0.0, 0.52]];
+  const pts = new THREE.SplineCurve(prof.map(([r, z]) => new THREE.Vector2(r, z))).getPoints(56)
+    .map(p => new THREE.Vector2(Math.max(0.0001, p.x), p.y));
+  const geo = new THREE.LatheGeometry(pts, 48);
+  geo.rotateX(Math.PI / 2);                 // eixo do torno vira o eixo z (frente = +z)
+  const pos = geo.attributes.position, col = [];
+  const ORANGE = new THREE.Color('#d47a28'), ORANGE_TOP = new THREE.Color('#c86a22'), WHITE = new THREE.Color('#fbf3e6');
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    y *= 0.84; if (y < 0) y *= 0.72;                         // mais achatado embaixo (barriguinha)
+    y += Math.max(0, z - 0.18) * 0.28;                       // cabeça um pouco erguida
+    pos.setXYZ(i, x, y + 0.27, z);
+    // ---- manchas (peso do branco de 0 a 1) ----
+    const hy = y - Math.max(0, z - 0.18) * 0.28;             // altura relativa ao eixo
+    const blazeW = 0.03 + Math.max(0, z - 0.3) * 0.55;       // faixa: estreita na testa, larga no focinho
+    const blaze = smooth(0.24, 0.3, z) * (1 - smooth(blazeW, blazeW + 0.03, Math.abs(x))) * smooth(-0.06, 0.0, hy);
+    const muzzle = smooth(0.42, 0.46, z);                    // ponta do focinho
+    const chin = smooth(0.26, 0.34, z) * (1 - smooth(-0.07, 0.01, hy)); // queixo e bochecha de baixo
+    const chest = 1 - smooth(-0.16, -0.08, hy);              // peito e barriga
+    const rear = smooth(0.0, -0.12, z) * (1 - smooth(-0.02, 0.1, hy)) * smooth(0.08, 0.18, Math.abs(x)); // lateral de trás clara
+    const w = Math.min(1, Math.max(blaze, muzzle, chin, chest, rear));
+    c.copy(ORANGE).lerp(ORANGE_TOP, smooth(0.1, 0.25, hy) * 0.6).lerp(WHITE, w);
+    col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+const jadeMat = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: grad });
+ol(mesh(jadeBodyGeo(), jadeMat, 0, 0, 0, J));
+const jHead = group(0, 0, 0, jBody);   // traços do rosto (o corpo já inclui a cabeça)
 const JH = { p: jHead };
-ol(mesh(sph(0.25, 28, 20), OR, 0, 0.31, 0.3, { ...JH, s: [1.08, 0.95, 1] }));
-for (const sx of [-1, 1]) mesh(sph(0.12, 14, 10), '#e6913d', sx * 0.13, 0.25, 0.4, JH);                 // bochechas fofas
-mesh(sph(0.11, 16, 12), WH, 0, 0.23, 0.5, { ...JH, s: [1.35, 0.85, 0.85] });                         // focinho
-mesh(sph(0.075, 12, 10), WH, 0, 0.33, 0.515, { ...JH, s: [0.6, 1.4, 0.6], r: [0.5, 0, 0] });            // faixa branca
-mesh(sph(0.065, 12, 10), WH, 0, 0.44, 0.47, { ...JH, s: [0.6, 1.2, 0.6], r: [0.9, 0, 0] });
-mesh(sph(0.055, 12, 10), WH, 0, 0.52, 0.38, { ...JH, s: [0.6, 1, 0.6], r: [1.2, 0, 0] });
 const jEyes = [];
 for (const sx of [-1, 1]) {
-  mesh(sph(0.085, 14, 10), '#c46a26', sx * 0.18, 0.5, 0.22, { ...JH, s: [1.2, 0.35, 0.95], r: [-0.2, 0, sx * 0.6] });   // orelha pétala
-  mesh(sph(0.05, 10, 8), '#f1a9a0', sx * 0.18, 0.505, 0.245, { ...JH, s: [1.1, 0.3, 0.8], r: [-0.2, 0, sx * 0.6], cast: false });
-  const e = group(sx * 0.135, 0.36, 0.46, jHead);
-  mesh(sph(0.05, 14, 10), '#1d120b', 0, 0, 0, { p: e, s: [1, 1.05, 0.8], cast: false });
-  mesh(sph(0.017, 8, 6), '#ffffff', 0.015, 0.022, 0.035, { p: e, cast: false });
-  mesh(sph(0.008, 6, 4), '#ffffff', -0.012, -0.015, 0.04, { p: e, cast: false });
+  // orelhas em pétala, abertas para os lados, laranja-avermelhadas com o interior rosado
+  const ear = group(sx * 0.17, 0.49, 0.2, jHead);
+  ear.rotation.set(-0.35, sx * 0.5, sx * 0.85);
+  ol(mesh(sph(0.095, 16, 12), '#c25a22', 0, 0, 0, { p: ear, s: [1.25, 0.32, 1] }));
+  mesh(sph(0.06, 12, 10), '#e9a59a', 0, 0.02, 0.01, { p: ear, s: [1.1, 0.25, 0.8], cast: false });
+  // olhos grandes, escuros e brilhantes, nas laterais da cabeça
+  const e = group(sx * 0.205, 0.37, 0.36, jHead);
+  e.rotation.y = sx * 0.9;
+  mesh(sph(0.06, 16, 12), '#140b06', 0, 0, 0, { p: e, s: [1, 1.05, 0.75], cast: false });
+  mesh(sph(0.02, 8, 6), '#ffffff', 0.018, 0.024, 0.04, { p: e, cast: false });
+  mesh(sph(0.009, 6, 4), '#ffffff', -0.015, -0.018, 0.045, { p: e, cast: false });
   jEyes.push(e);
-  for (const z of [0.27, -0.33]) ol(mesh(sph(0.05, 10, 8), '#f1a9a0', sx * 0.15, 0.025, z, { ...J, s: [1, 0.5, 1.3] }));   // patinhas
+  // patinhas rosadas
+  for (const z of [0.26, -0.3]) mesh(sph(0.05, 10, 8), '#f1a9a0', sx * 0.15, 0.03, z, { ...J, s: [1, 0.45, 1.3] });
 }
-mesh(sph(0.028, 10, 8), '#e9888f', 0, 0.28, 0.59, { ...JH, s: [1.3, 0.8, 1], cast: false });           // nariz
+mesh(sph(0.034, 12, 10), '#e98a92', 0, 0.355, 0.515, { ...JH, s: [1.4, 0.9, 0.8], cast: false });   // nariz rosa
 const wPts = [];
-for (const sx of [-1, 1]) for (const dy of [-0.02, 0.02]) wPts.push(sx * 0.06, 0.26 + dy, 0.56, sx * 0.32, 0.26 + dy * 3, 0.5);
-wPts.push(0, 0.26, 0.6, 0, 0.22, 0.6, 0, 0.22, 0.6, -0.03, 0.2, 0.59, 0, 0.22, 0.6, 0.03, 0.2, 0.59);  // boquinha em Y
+for (const sx of [-1, 1]) for (const dy of [-0.025, 0.02]) wPts.push(sx * 0.07, 0.31 + dy, 0.49, sx * 0.36, 0.3 + dy * 3, 0.43);
+wPts.push(0, 0.335, 0.52, 0, 0.3, 0.515, 0, 0.3, 0.515, -0.035, 0.28, 0.505, 0, 0.3, 0.515, 0.035, 0.28, 0.505); // boquinha em Y
 jHead.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wPts, 3)),
-  new THREE.LineBasicMaterial({ color: '#7a4a32' })));
+  new THREE.LineBasicMaterial({ color: '#6b3f2a' })));
 // acessórios da loja
 const ACC = {
   lacinho: group(0, 0, 0, jHead),
   chapeu: group(0, 0, 0, jHead),
   cachecol: group(0, 0, 0, jBody),
 };
-for (const sx of [-1, 1]) ol(mesh(cone(0.06, 0.12), '#ff6fa5', 0.22 + sx * 0.06, 0.58, 0.18, { p: ACC.lacinho, r: [0, 0, sx * Math.PI / 2] }));
-mesh(sph(0.03), '#e0457f', 0.22, 0.58, 0.18, { p: ACC.lacinho });
-ol(mesh(cyl(0.15, 0.15, 0.12), '#ffffff', 0, 0.62, 0.27, { p: ACC.chapeu }));
-for (const [x, z] of [[-0.08, 0.24], [0.08, 0.24], [0, 0.33]]) ol(mesh(sph(0.11), '#ffffff', x, 0.74, z, { p: ACC.chapeu }));
-ol(mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), '#d1495b', 0, 0.2, 0.33, { p: ACC.cachecol, r: [Math.PI / 2 - 0.3, 0, 0] }));
-mesh(box(0.08, 0.2, 0.04), '#d1495b', 0.12, 0.08, 0.48, { p: ACC.cachecol, r: [0.2, 0, 0.2] });
+for (const sx of [-1, 1]) ol(mesh(cone(0.055, 0.11), '#ff6fa5', 0.21 + sx * 0.055, 0.56, 0.12, { p: ACC.lacinho, r: [0, 0, sx * Math.PI / 2] }));
+mesh(sph(0.028), '#e0457f', 0.21, 0.56, 0.12, { p: ACC.lacinho });
+ol(mesh(cyl(0.13, 0.13, 0.11), '#ffffff', 0, 0.6, 0.3, { p: ACC.chapeu }));
+for (const [x, z] of [[-0.07, 0.27], [0.07, 0.27], [0, 0.35]]) ol(mesh(sph(0.1), '#ffffff', x, 0.71, z, { p: ACC.chapeu }));
+ol(mesh(new THREE.TorusGeometry(0.29, 0.045, 8, 28), '#d1495b', 0, 0.27, 0.17, { p: ACC.cachecol }));
+mesh(box(0.08, 0.2, 0.04), '#d1495b', 0.14, 0.12, 0.42, { p: ACC.cachecol, r: [0.2, 0, 0.2] });
 // regadorzinho que a Jade carrega quando vai à horta
-const jCan = group(0, 0.5, -0.15, jBody);
+const jCan = group(0, 0.56, -0.15, jBody);
 ol(mesh(cyl(0.07, 0.08, 0.13), '#4aa3df', 0, 0, 0, { p: jCan }));
 mesh(cyl(0.012, 0.015, 0.18), '#4aa3df', 0, 0.02, 0.1, { p: jCan, r: [1.0, 0, 0] });
 jCan.visible = false;
@@ -769,7 +803,7 @@ window.onGameEvent = (name, d) => {
       break;
     }
     case 'feed': {
-      const h = jHead.localToWorld(V(0, 0.28, 0.75));
+      const h = jHead.localToWorld(V(0, 0.3, 0.62));
       for (let i = 0; i < 4; i++) spawn(h.clone().add(rnd3(0.12)), V(0, 0, 0), FOOD_COLOR[d.id] || '#5fb548', 0.6 + i * 0.12, 0.06, 0);
       break;
     }
@@ -793,8 +827,6 @@ window.onGameEvent = (name, d) => {
 // ================= LOOP =================
 let last = performance.now(), blinkT = 2;
 function loop(now) {
-  // trava em ~60 fps: em telas de 120 Hz pula um quadro sim, outro não (economiza bateria)
-  if (now - last < 1000 / 62) return;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const t = now / 1000;
   const inGame = UI.screen === 'game' && G.run && G.s;
@@ -864,7 +896,7 @@ function loop(now) {
   const eating = UI.jadeExpr === 'comendo';
   jade.visible = !(inGame && G.run.jadeFuga > 0);
   jBody.scale.set(1, 1 + Math.sin(t * (helping ? 3 : 1.4)) * (helping ? 0.025 : 0.04), 1);
-  jHead.rotation.x = eating ? Math.sin(t * 18) * 0.08 : 0;
+  jBody.rotation.x = eating ? Math.sin(t * 18) * 0.04 : 0;
   for (const e of jEyes) e.scale.y = helping ? (blinkT < 0.12 ? 0.15 : 1) : 0.15;
   zzz.visible = !helping;
   zzz.position.y = 0.85 + Math.sin(t * 2) * 0.05;
@@ -961,19 +993,25 @@ function loop(now) {
   }
 
   updateFx(dt);
-  renderer.render(scene, camera);
 }
 
 // Rede de segurança: um erro num quadro não pode congelar o 3D para sempre
 // (o Three.js para de agendar quadros se o loop lançar uma exceção).
 let loopErrors = 0;
 function safeLoop(now) {
+  if (now - last < 1000 / 62) return;        // trava em ~60 fps
   try { loop(now); }
   catch (e) {
     loopErrors++;
-    if (loopErrors <= 3) console.error('[3D] erro no quadro (o jogo continua):', e);
-    last = now; // evita um salto de tempo no próximo quadro
+    last = now;                               // evita um salto de tempo no próximo quadro
+    if (loopErrors <= 3) {
+      console.error('[3D] erro no quadro (o jogo continua):', e);
+      // mostra na tela para dar para tirar print e reportar
+      UI.toast('Erro 3D: ' + String(e && e.message || e).slice(0, 80));
+    }
   }
+  // desenha SEMPRE, mesmo se a lógica do quadro falhou (senão a tela congela)
+  try { renderer.render(scene, camera); } catch (e) { /* ignora */ }
 }
 
 // economiza bateria: para quando o app sai da tela

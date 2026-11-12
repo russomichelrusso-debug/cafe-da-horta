@@ -68,6 +68,7 @@ const UI = {
         <button class="btn big ${cont ? 'ghost' : ''}" data-act="start" data-arg="0">${cont ? 'Novo jogo' : 'Jogar'}</button>
         <p class="hint">Plante, colha, prepare os pedidos e cuide da Jade.<br>Perca 3 clientes e o dia termina!</p>
         ${window.MODO_3D ? '<a class="proto-link" href="../">🎨 Jogar a versão 2D</a>' : '<a class="proto-link" href="3d/">🧊 Jogar em 3D (beta)</a>'}
+        <small class="versao">versão ${VERSAO}</small>
       </div>`;
   },
 

@@ -277,6 +277,7 @@ button:disabled { opacity: .45; cursor: default; }
 .title-box h1 { font-size: 54px; color: var(--verde-esc); text-shadow: 0 3px 0 #fff; }
 .sub { font-size: 20px; font-weight: 800; color: var(--vinho); margin-top: -14px; }
 .hint { font-size: 14px; text-align: center; opacity: .75; }
+.versao { font-size: 11px; opacity: .55; font-weight: 700; }
 .proto-link { font-size: 14px; font-weight: 800; color: var(--verde-esc); background: rgba(255,255,255,.7); padding: 6px 14px; border-radius: 10px; text-decoration: none; }
 #overlay.night { background: linear-gradient(#1d2a50, #3b3f75); color: #fff; }
 .night-box { display: flex; flex-direction: column; align-items: center; gap: 7px; }
