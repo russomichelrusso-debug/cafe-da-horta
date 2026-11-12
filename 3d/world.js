@@ -130,50 +130,108 @@ for (const [x, z, s] of [[12.5, -5, 1.2], [6.5, -6, 1], [14.5, -2, 0.9]]) {
 const puddle = mesh(cyl(0.9, 0.9, 0.02, 24), '#6fb8ee', 7.9, 0.02, 2.4, { cast: false, s: [1.4, 1, 0.8] });
 puddle.visible = false;
 
+// ================= CONTORNO DE DESENHO (casca invertida) =================
+// Uma cópia da malha, empurrada para fora pela normal e desenhada só por dentro:
+// vira uma linha escura em volta do personagem, como em desenho animado.
+const outlineMat = new THREE.ShaderMaterial({
+  uniforms: { thick: { value: 0.014 }, color: { value: new THREE.Color('#3b2418') } },
+  vertexShader: 'uniform float thick; void main(){ vec3 p = position + normalize(normal) * thick; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
+  fragmentShader: 'uniform vec3 color; void main(){ gl_FragColor = vec4(color, 1.0); }',
+  side: THREE.BackSide,
+});
+function ol(m) { const o = new THREE.Mesh(m.geometry, outlineMat); o.castShadow = false; m.add(o); return m; }
+const lathe = (pts, seg = 24, ps = 0, pl = Math.PI * 2) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg, ps, pl);
+const half = (r, w = 24, h = 12, f = 0.55) => new THREE.SphereGeometry(r, w, h, 0, Math.PI * 2, 0, Math.PI * f);
+
 // ================= MARIA ALICE =================
-const mariaRoot = group(-1.0, 0, -1.05);   // anda pelo cenário
+const mariaRoot = group(-1.0, 0, -1.3);    // anda pelo cenário
 mariaRoot.rotation.y = 0.35;
 const maria = group(0, 0, 0, mariaRoot);    // balança/abaixa
 const P = { p: maria };
-mesh(cyl(0.32, 0.6, 1.5, 24), '#8c2738', 0, 0.95, 0, P);
-mesh(box(0.56, 0.75, 0.04), '#fffaf3', 0, 1.15, 0.42, { ...P, r: [-0.18, 0, 0] });
-mesh(box(0.36, 0.32, 0.04), '#fffaf3', 0, 1.55, 0.35, { ...P, r: [-0.1, 0, 0] });
-mesh(sph(0.05), '#e35d6a', 0, 1.56, 0.38, { ...P, s: [1, 0.9, 0.4] });
-const armL = group(-0.36, 1.68, 0.02, maria), armR = group(0.36, 1.68, 0.02, maria);
-mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armL });
-mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armR });
-armL.rotation.z = -0.25; armR.rotation.z = 0.25;
-const shoes = [-1, 1].map(sx => mesh(sph(0.1), '#6b3b2a', sx * 0.16, 0.06, 0.12, { ...P, s: [0.9, 0.6, 1.4] }));
+const SKIN = '#f6d2b8', SKIN2 = '#efc3a4', VINHO = '#8c2738', HAIR = '#5b3a25', HAIR2 = '#4a2e1c', HAIRL = '#7a4e30';
+// pernas (giram ao andar) com sapatinhos boneca
+const legs = [-1, 1].map(sx => {
+  const g = group(sx * 0.13, 0.6, 0, maria);
+  mesh(cyl(0.065, 0.06, 0.5, 12), SKIN2, 0, -0.27, 0, { p: g });
+  ol(mesh(sph(0.09, 14, 10), '#7a2c2c', 0, -0.53, 0.05, { p: g, s: [0.95, 0.6, 1.45] }));
+  mesh(box(0.13, 0.015, 0.02), '#5a1e1e', 0, -0.49, 0.03, { p: g, cast: false });
+  return g;
+});
+// vestido vinho de saia rodada
+ol(mesh(lathe([[0.001, 0.55], [0.58, 0.55], [0.6, 0.6], [0.5, 0.85], [0.38, 1.15], [0.27, 1.33], [0.25, 1.4], [0.28, 1.58], [0.25, 1.74], [0.14, 1.8], [0.001, 1.8]], 28), VINHO, 0, 0, 0, P));
+mesh(new THREE.TorusGeometry(0.585, 0.025, 6, 32), '#a8384b', 0, 0.58, 0, { ...P, r: [Math.PI / 2, 0, 0], cast: false });   // barra
+mesh(new THREE.TorusGeometry(0.262, 0.035, 8, 24), '#6e1c2b', 0, 1.36, 0, { ...P, r: [Math.PI / 2, 0, 0] });          // faixa
+// avental branco que acompanha a curva da saia
+const apronMat = new THREE.MeshToonMaterial({ color: '#fffaf3', gradientMap: grad, side: THREE.DoubleSide });
+mesh(lathe([[0.615, 0.63], [0.525, 0.85], [0.405, 1.15], [0.295, 1.34]], 14, -0.75, 1.5), apronMat, 0, 0, 0, P);
+mesh(box(0.3, 0.3, 0.03), '#fffaf3', 0, 1.53, 0.265, { ...P, r: [-0.1, 0, 0] });
+for (const sx of [-1, 1]) mesh(box(0.05, 0.36, 0.03), '#fffaf3', sx * 0.12, 1.72, 0.12, { ...P, r: [0.95, 0, 0] });
+mesh(box(0.2, 0.14, 0.02), '#f1e4d6', 0, 0.97, 0.47, { ...P, r: [-0.38, 0, 0] });                                     // bolso
+mesh(sph(0.045, 10, 8), '#e35d6a', -0.025, 1.56, 0.285, { ...P, s: [1, 0.9, 0.4], cast: false });                    // coraçãozinho
+mesh(sph(0.045, 10, 8), '#e35d6a', 0.025, 1.56, 0.285, { ...P, s: [1, 0.9, 0.4], cast: false });
+mesh(cone(0.045, 0.06), '#e35d6a', 0, 1.525, 0.285, { ...P, r: [Math.PI, 0, 0], cast: false });
+// braços com mangas bufantes e mãos
+const armL = group(-0.3, 1.7, 0, maria), armR = group(0.3, 1.7, 0, maria);
+for (const a of [armL, armR]) {
+  ol(mesh(sph(0.115, 14, 10), VINHO, 0, -0.03, 0, { p: a, s: [1, 0.9, 1] }));
+  mesh(cap(0.062, 0.42), SKIN2, 0, -0.32, 0, { p: a });
+  ol(mesh(sph(0.075, 12, 10), SKIN, 0, -0.62, 0.01, { p: a }));
+}
+armL.rotation.z = -0.22; armR.rotation.z = 0.22;
 // regador na mão (aparece quando ela está na horta)
-const mCan = group(0, -0.74, 0.06, armR);
-mesh(cyl(0.12, 0.14, 0.22), '#4aa3df', 0, -0.08, 0, { p: mCan });
-mesh(cyl(0.02, 0.025, 0.32), '#4aa3df', 0, -0.02, 0.17, { p: mCan, r: [1.0, 0, 0] });
+const mCan = group(0, -0.7, 0.05, armR);
+ol(mesh(cyl(0.12, 0.14, 0.22, 16), '#4aa3df', 0, -0.08, 0, { p: mCan }));
+mesh(cyl(0.02, 0.025, 0.32, 8), '#4aa3df', 0, -0.02, 0.17, { p: mCan, r: [1.0, 0, 0] });
+mesh(new THREE.TorusGeometry(0.08, 0.015, 6, 14, Math.PI), '#2f7fb5', 0, 0.04, -0.02, { p: mCan, r: [0, Math.PI / 2, 0] });
 const spout = group(0, 0.08, 0.32, mCan);
 mCan.visible = false;
-mesh(cyl(0.1, 0.12, 0.22), '#efc3a4', 0, 1.8, 0, P);
+mesh(cyl(0.085, 0.1, 0.2, 12), SKIN2, 0, 1.84, 0, P);                                                                 // pescoço
+mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 18), '#fffaf3', 0, 1.78, 0.01, { ...P, r: [Math.PI / 2 - 0.15, 0, 0] });  // golinha
+// cabeça
 const head = group(0, 2.22, 0, maria);
 const H = { p: head };
-mesh(sph(0.42, 28, 20), '#f6d2b8', 0, 0, 0, H);
-mesh(cap(0.4, 0.55), '#5b3a25', 0, -0.4, -0.2, { ...H, s: [1.15, 1, 0.6] });
-mesh(new THREE.SphereGeometry(0.445, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52), '#5b3a25', 0, 0.02, -0.02, { ...H, r: [-0.38, 0, 0] });
-mesh(sph(0.2), '#6b4329', -0.1, 0.3, 0.28, { ...H, s: [1.7, 0.55, 0.7], r: [0.3, 0, 0.35] });
-for (const sx of [-1, 1]) {
-  mesh(cap(0.12, 0.75), '#5b3a25', sx * 0.4, -0.38, 0.02, { ...H, r: [0, 0, sx * 0.08] });
-  mesh(sph(0.11), '#5b3a25', sx * 0.43, -0.82, 0.04, H);
+ol(mesh(sph(0.42, 32, 24), SKIN, 0, 0, 0, { ...H, s: [1, 0.97, 0.95] }));
+// cabelo castanho ondulado: topo, volume, mechas onduladas e franja de lado
+ol(mesh(half(0.455, 32, 16, 0.55), HAIR, 0, 0.02, -0.02, { ...H, r: [-0.42, 0, 0] }));
+ol(mesh(sph(0.44, 24, 16), HAIR, 0, -0.06, -0.13, { ...H, s: [1.06, 1.05, 0.88] }));
+ol(mesh(cap(0.36, 0.5), HAIR, 0, -0.48, -0.22, { ...H, s: [1.18, 1, 0.55] }));
+for (let k = 0; k < 7; k++) {
+  const a = -1.9 + k * (3.8 / 6), x = Math.sin(a) * 0.4, z = -Math.cos(a) * 0.3 - 0.05;
+  const col = k % 2 ? HAIR : HAIR2;
+  mesh(cap(0.095, 0.42), col, x, -0.5, z, { ...H, r: [0.08, 0, -Math.sin(a) * 0.15] });
+  mesh(sph(0.105, 12, 8), col, x * 1.08, -0.78, z - 0.02, H);                                                      // onda
+  mesh(sph(0.09, 12, 8), col, x * 0.96, -0.95, z + 0.03, H);                                                       // cachinho da ponta
 }
+for (const sx of [-1, 1]) {   // mechas da frente, sobre os ombros
+  ol(mesh(cap(0.1, 0.55), HAIR, sx * 0.39, -0.4, 0.1, { ...H, r: [0, 0, sx * 0.06] }));
+  mesh(sph(0.105, 12, 8), HAIR2, sx * 0.42, -0.78, 0.14, H);
+  mesh(sph(0.09, 12, 8), HAIR, sx * 0.38, -0.95, 0.18, H);
+}
+ol(mesh(sph(0.2, 16, 10), HAIR, -0.17, 0.29, 0.29, { ...H, s: [1.45, 0.55, 0.62], r: [0.35, 0, 0.42] }));     // franja
+mesh(sph(0.18, 16, 10), HAIRL, 0.02, 0.35, 0.3, { ...H, s: [1.4, 0.45, 0.55], r: [0.4, 0, 0.18] });
+mesh(sph(0.15, 16, 10), HAIR, 0.2, 0.27, 0.3, { ...H, s: [1.2, 0.5, 0.55], r: [0.35, 0, -0.15] });
+mesh(sph(0.12, 12, 8), HAIRL, 0.12, 0.42, 0.05, { ...H, s: [1.6, 0.4, 1], r: [-0.3, 0, -0.2] });               // brilho
+// rosto: olhos grandes castanhos com cílios, sobrancelhas marcantes, sorriso
 const mEyes = [], mBrows = [];
+const DARK = '#2a160b';
 for (const sx of [-1, 1]) {
-  const e = group(sx * 0.15, 0, 0.37, head);
-  mesh(sph(0.085), '#ffffff', 0, 0, 0, { p: e, s: [1, 1.15, 0.5], cast: false });
-  mesh(sph(0.06), '#7a4524', 0, -0.005, 0.03, { p: e, s: [1, 1.1, 0.5], cast: false });
-  mesh(sph(0.032), '#1d120b', 0, -0.005, 0.05, { p: e, cast: false });
-  mesh(sph(0.017), '#ffffff', 0.022, 0.03, 0.07, { p: e, cast: false });
+  const e = group(sx * 0.155, 0.0, 0.355, head);
+  mesh(sph(0.092, 16, 12), '#ffffff', 0, 0, 0, { p: e, s: [1, 1.2, 0.45], cast: false });
+  mesh(sph(0.07, 16, 12), '#7a4524', 0, -0.008, 0.024, { p: e, s: [1, 1.12, 0.45], cast: false });
+  mesh(sph(0.042, 12, 8), '#a3693c', 0, -0.03, 0.04, { p: e, s: [1, 0.9, 0.35], cast: false });
+  mesh(sph(0.036, 12, 8), DARK, 0, 0, 0.05, { p: e, s: [1, 1.1, 0.5], cast: false });
+  mesh(sph(0.021, 8, 6), '#ffffff', 0.026, 0.038, 0.07, { p: e, cast: false });
+  mesh(sph(0.01, 6, 4), '#ffffff', -0.022, -0.03, 0.07, { p: e, cast: false });
+  mesh(new THREE.TorusGeometry(0.092, 0.013, 6, 18, Math.PI), DARK, 0, 0.012, 0.028, { p: e, s: [1, 1.2, 1], cast: false }); // pálpebra
+  for (let l = 0; l < 3; l++) mesh(box(0.012, 0.045, 0.01), DARK, sx * (0.07 + l * 0.018), 0.085 - l * 0.02, 0.03, { p: e, r: [0, 0, -sx * (0.5 + l * 0.35)], cast: false });
   mEyes.push(e);
-  mBrows.push(mesh(box(0.15, 0.028, 0.03), '#3b2416', sx * 0.15, 0.16, 0.38, { ...H, r: [0, 0, -sx * 0.12], cast: false }));
-  mesh(sph(0.06), '#f3a1a0', sx * 0.25, -0.12, 0.31, { ...H, s: [1.3, 0.7, 0.3], cast: false });
+  mBrows.push(mesh(cap(0.019, 0.1), '#3b2416', sx * 0.155, 0.175, 0.375, { ...H, r: [0, 0, Math.PI / 2 - sx * 0.12], cast: false }));
+  mesh(sph(0.065, 12, 8), '#f3a1a0', sx * 0.26, -0.12, 0.3, { ...H, s: [1.3, 0.65, 0.3], cast: false });
+  mesh(sph(0.07, 10, 8), SKIN2, sx * 0.41, -0.03, 0.0, H);                                                          // orelhas
 }
-mesh(sph(0.03), '#efbf9f', 0, -0.08, 0.42, { ...H, cast: false });
-const smile = mesh(new THREE.TorusGeometry(0.07, 0.014, 8, 20, Math.PI), '#b5485a', 0, -0.17, 0.385, { ...H, r: [-0.15, 0, Math.PI], cast: false });
+mesh(sph(0.028, 10, 8), '#efbf9f', 0, -0.075, 0.41, { ...H, s: [1, 0.8, 1], cast: false });
+const smile = mesh(new THREE.TorusGeometry(0.065, 0.014, 8, 20, Math.PI), '#b5485a', 0, -0.17, 0.375, { ...H, r: [-0.15, 0, Math.PI], cast: false });
+mesh(sph(0.03, 10, 8), '#e98a95', 0, -0.205, 0.37, { ...H, s: [1.3, 0.5, 0.5], cast: false });
 
 // ================= JADE =================
 const JADE_POS = V(-2.0, TOP, 0.15);
@@ -182,43 +240,50 @@ jade.rotation.y = 0.55;
 jade.scale.setScalar(1.25);
 const jBody = group(0, 0, 0, jade);
 const J = { p: jBody };
-mesh(sph(0.3), '#d9822b', 0, 0.25, -0.05, { ...J, s: [1, 0.82, 1.35] });
+const OR = '#d9822b', OR2 = '#cf7524', ORL = '#e9a050', WH = '#fff6ea';
+ol(mesh(sph(0.3, 28, 18), OR, 0, 0.26, -0.05, { ...J, s: [1.05, 0.85, 1.38] }));
+mesh(sph(0.24, 20, 14), OR, 0, 0.25, -0.33, { ...J, s: [1.1, 0.95, 0.9] });                      // traseiro fofo
+mesh(sph(0.17, 16, 12), WH, 0, 0.16, 0.33, { ...J, s: [1.25, 1, 0.75] });                            // peito branco
 const jHead = group(0, 0, 0, jBody);
 const JH = { p: jHead };
-mesh(sph(0.24), '#de8a33', 0, 0.3, 0.3, { ...JH, s: [1.05, 0.95, 1] });
-mesh(sph(0.1), '#fff6ea', 0, 0.37, 0.49, { ...JH, s: [0.55, 1.6, 0.6], r: [0.45, 0, 0] });
-mesh(sph(0.1), '#fff6ea', 0, 0.24, 0.5, { ...JH, s: [1.3, 0.8, 0.8] });
-mesh(sph(0.16), '#fff6ea', 0, 0.13, 0.36, { ...J, s: [1.2, 0.9, 0.7] });
+ol(mesh(sph(0.25, 28, 20), OR, 0, 0.31, 0.3, { ...JH, s: [1.08, 0.95, 1] }));
+for (const sx of [-1, 1]) mesh(sph(0.12, 14, 10), '#e6913d', sx * 0.13, 0.25, 0.4, JH);                 // bochechas fofas
+mesh(sph(0.11, 16, 12), WH, 0, 0.23, 0.5, { ...JH, s: [1.35, 0.85, 0.85] });                         // focinho
+mesh(sph(0.075, 12, 10), WH, 0, 0.33, 0.515, { ...JH, s: [0.6, 1.4, 0.6], r: [0.5, 0, 0] });            // faixa branca
+mesh(sph(0.065, 12, 10), WH, 0, 0.44, 0.47, { ...JH, s: [0.6, 1.2, 0.6], r: [0.9, 0, 0] });
+mesh(sph(0.055, 12, 10), WH, 0, 0.52, 0.38, { ...JH, s: [0.6, 1, 0.6], r: [1.2, 0, 0] });
 const jEyes = [];
 for (const sx of [-1, 1]) {
-  mesh(sph(0.08), '#c2611f', sx * 0.17, 0.5, 0.22, { ...JH, s: [1.2, 0.6, 0.9], r: [0, 0, sx * 0.5] });
-  const e = group(sx * 0.13, 0.36, 0.47, jHead);
-  mesh(sph(0.045), '#1d120b', 0, 0, 0, { p: e, cast: false });
-  mesh(sph(0.014), '#ffffff', 0.012, 0.02, 0.035, { p: e, cast: false });
+  mesh(sph(0.085, 14, 10), '#c46a26', sx * 0.18, 0.5, 0.22, { ...JH, s: [1.2, 0.35, 0.95], r: [-0.2, 0, sx * 0.6] });   // orelha pétala
+  mesh(sph(0.05, 10, 8), '#f1a9a0', sx * 0.18, 0.505, 0.245, { ...JH, s: [1.1, 0.3, 0.8], r: [-0.2, 0, sx * 0.6], cast: false });
+  const e = group(sx * 0.135, 0.36, 0.46, jHead);
+  mesh(sph(0.05, 14, 10), '#1d120b', 0, 0, 0, { p: e, s: [1, 1.05, 0.8], cast: false });
+  mesh(sph(0.017, 8, 6), '#ffffff', 0.015, 0.022, 0.035, { p: e, cast: false });
+  mesh(sph(0.008, 6, 4), '#ffffff', -0.012, -0.015, 0.04, { p: e, cast: false });
   jEyes.push(e);
-  mesh(sph(0.05), '#f1a9a0', sx * 0.15, 0.02, 0.25, { ...J, s: [1, 0.5, 1.3] });
-  mesh(sph(0.05), '#f1a9a0', sx * 0.15, 0.02, -0.32, { ...J, s: [1, 0.5, 1.3] });
+  for (const z of [0.27, -0.33]) ol(mesh(sph(0.05, 10, 8), '#f1a9a0', sx * 0.15, 0.025, z, { ...J, s: [1, 0.5, 1.3] }));   // patinhas
 }
-mesh(sph(0.025), '#e9888f', 0, 0.28, 0.585, { ...JH, cast: false });
+mesh(sph(0.028, 10, 8), '#e9888f', 0, 0.28, 0.59, { ...JH, s: [1.3, 0.8, 1], cast: false });           // nariz
 const wPts = [];
-for (const sx of [-1, 1]) for (const dy of [-0.02, 0.02]) wPts.push(sx * 0.06, 0.26 + dy, 0.56, sx * 0.3, 0.26 + dy * 3, 0.5);
+for (const sx of [-1, 1]) for (const dy of [-0.02, 0.02]) wPts.push(sx * 0.06, 0.26 + dy, 0.56, sx * 0.32, 0.26 + dy * 3, 0.5);
+wPts.push(0, 0.26, 0.6, 0, 0.22, 0.6, 0, 0.22, 0.6, -0.03, 0.2, 0.59, 0, 0.22, 0.6, 0.03, 0.2, 0.59);  // boquinha em Y
 jHead.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wPts, 3)),
-  new THREE.LineBasicMaterial({ color: '#f7ead8' })));
+  new THREE.LineBasicMaterial({ color: '#7a4a32' })));
 // acessórios da loja
 const ACC = {
   lacinho: group(0, 0, 0, jHead),
   chapeu: group(0, 0, 0, jHead),
   cachecol: group(0, 0, 0, jBody),
 };
-for (const sx of [-1, 1]) mesh(cone(0.06, 0.12), '#ff6fa5', 0.2 + sx * 0.06, 0.56, 0.18, { p: ACC.lacinho, r: [0, 0, sx * Math.PI / 2] });
-mesh(sph(0.03), '#e0457f', 0.2, 0.56, 0.18, { p: ACC.lacinho });
-mesh(cyl(0.15, 0.15, 0.12), '#ffffff', 0, 0.6, 0.27, { p: ACC.chapeu });
-for (const [x, z] of [[-0.08, 0.24], [0.08, 0.24], [0, 0.33]]) mesh(sph(0.11), '#ffffff', x, 0.72, z, { p: ACC.chapeu });
-mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), '#d1495b', 0, 0.2, 0.33, { p: ACC.cachecol, r: [Math.PI / 2 - 0.3, 0, 0] });
+for (const sx of [-1, 1]) ol(mesh(cone(0.06, 0.12), '#ff6fa5', 0.22 + sx * 0.06, 0.58, 0.18, { p: ACC.lacinho, r: [0, 0, sx * Math.PI / 2] }));
+mesh(sph(0.03), '#e0457f', 0.22, 0.58, 0.18, { p: ACC.lacinho });
+ol(mesh(cyl(0.15, 0.15, 0.12), '#ffffff', 0, 0.62, 0.27, { p: ACC.chapeu }));
+for (const [x, z] of [[-0.08, 0.24], [0.08, 0.24], [0, 0.33]]) ol(mesh(sph(0.11), '#ffffff', x, 0.74, z, { p: ACC.chapeu }));
+ol(mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), '#d1495b', 0, 0.2, 0.33, { p: ACC.cachecol, r: [Math.PI / 2 - 0.3, 0, 0] }));
 mesh(box(0.08, 0.2, 0.04), '#d1495b', 0.12, 0.08, 0.48, { p: ACC.cachecol, r: [0.2, 0, 0.2] });
 // regadorzinho que a Jade carrega quando vai à horta
 const jCan = group(0, 0.5, -0.15, jBody);
-mesh(cyl(0.07, 0.08, 0.13), '#4aa3df', 0, 0, 0, { p: jCan });
+ol(mesh(cyl(0.07, 0.08, 0.13), '#4aa3df', 0, 0, 0, { p: jCan }));
 mesh(cyl(0.012, 0.015, 0.18), '#4aa3df', 0, 0.02, 0.1, { p: jCan, r: [1.0, 0, 0] });
 jCan.visible = false;
 const zzz = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('z z z', null, '#6b7fa6', 256, 96, 64), transparent: true }));
@@ -229,21 +294,36 @@ const SLOTS = [V(-0.7, 0, 1.3), V(0.9, 0, 1.35), V(2.5, 0, 1.3), V(4.0, 0, 1.4)]
 const ENTRY = V(6.5, 0, 3.5), EXIT = V(7, 0, 5);
 const custs = new Map();   // id -> { g, mouth, key }
 const leavers = [];
+const PANTS = ['#2f3b5c', '#4a3a2a', '#3b3b3b', '#5a6b7f', '#6b4a6b'];
 
 function buildCustomer(c) {
   const L = c.look;
   const g = group(ENTRY.x, 0, ENTRY.z);
   const o = { p: g };
-  mesh(cap(0.3, 0.7), L.shirt, 0, 0.75, 0, o);
-  mesh(sph(0.3), L.skin, 0, 1.55, 0, o);
-  const hairTop = () => mesh(new THREE.SphereGeometry(0.315, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), L.hair, 0, 1.57, -0.02, { ...o, r: [-0.3, 0, 0] });
-  if (L.style === 0) hairTop();
-  if (L.style === 1) { hairTop(); mesh(cap(0.26, 0.4), L.hair, 0, 1.35, -0.16, { ...o, s: [1.1, 1, 0.6] }); }
-  if (L.style === 2) { hairTop(); mesh(sph(0.14), L.hair, 0, 1.92, -0.08, o); }
-  if (L.style === 3) for (const [x, y, z] of [[-0.2, 1.75, 0], [0.2, 1.75, 0], [0, 1.85, -0.05], [-0.12, 1.8, -0.18], [0.12, 1.8, -0.18]]) mesh(sph(0.15), L.hair, x, y, z, o);
-  for (const sx of [-1, 1]) mesh(sph(0.035), '#1d120b', sx * 0.1, 1.58, 0.27, { ...o, cast: false });
-  const mouth = mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 14, Math.PI), '#7a3a2a', 0, 1.46, 0.28, { ...o, r: [0, 0, Math.PI], cast: false });
-  if (c.vip) { mesh(cyl(0.2, 0.22, 0.06), '#f2b33d', 0, 1.88, 0, o); mesh(cone(0.1, 0.18), '#f2b33d', 0, 1.99, 0, o); }
+  const pants = PANTS[c.id % PANTS.length];
+  for (const sx of [-1, 1]) {
+    mesh(cyl(0.075, 0.07, 0.55, 10), pants, sx * 0.11, 0.3, 0, o);
+    ol(mesh(sph(0.08, 10, 8), '#3a2a22', sx * 0.11, 0.04, 0.05, { ...o, s: [1, 0.6, 1.4] }));
+  }
+  ol(mesh(lathe([[0.001, 0.55], [0.26, 0.55], [0.3, 0.75], [0.3, 1.05], [0.24, 1.25], [0.12, 1.31], [0.001, 1.31]], 18), L.shirt, 0, 0, 0, o));
+  for (const sx of [-1, 1]) {
+    mesh(cap(0.07, 0.42), L.shirt, sx * 0.34, 0.95, 0, { ...o, r: [0, 0, sx * 0.15] });
+    mesh(sph(0.07, 10, 8), L.skin, sx * 0.38, 0.66, 0.01, o);
+  }
+  mesh(cyl(0.07, 0.08, 0.14, 10), L.skin, 0, 1.34, 0, o);
+  ol(mesh(sph(0.27, 22, 16), L.skin, 0, 1.6, 0, o));
+  const hairTop = () => ol(mesh(half(0.285, 20, 10, 0.55), L.hair, 0, 1.62, -0.02, { ...o, r: [-0.35, 0, 0] }));
+  if (L.style === 0) { hairTop(); mesh(sph(0.26, 16, 10), L.hair, 0, 1.6, -0.07, { ...o, s: [1.03, 1, 0.9] }); }
+  if (L.style === 1) { hairTop(); ol(mesh(cap(0.24, 0.42), L.hair, 0, 1.38, -0.14, { ...o, s: [1.15, 1, 0.6] })); }
+  if (L.style === 2) { hairTop(); ol(mesh(sph(0.13, 12, 8), L.hair, 0, 1.94, -0.1, o)); mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 12), '#e35d8a', 0, 1.87, -0.07, { ...o, r: [Math.PI / 2 + 0.4, 0, 0] }); }
+  if (L.style === 3) for (const [x, y, z] of [[-0.2, 1.78, 0], [0.2, 1.78, 0], [0, 1.88, -0.03], [-0.13, 1.82, -0.17], [0.13, 1.82, -0.17], [0, 1.72, -0.24]]) ol(mesh(sph(0.14, 12, 8), L.hair, x, y, z, o));
+  for (const sx of [-1, 1]) {
+    mesh(sph(0.036, 10, 8), '#1d120b', sx * 0.1, 1.63, 0.245, { ...o, s: [1, 1.2, 0.6], cast: false });
+    mesh(sph(0.012, 6, 4), '#ffffff', sx * 0.1 + 0.01, 1.645, 0.262, { ...o, cast: false });
+    mesh(sph(0.04, 8, 6), '#f3a1a0', sx * 0.16, 1.54, 0.21, { ...o, s: [1.3, 0.6, 0.3], cast: false });
+  }
+  const mouth = mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 14, Math.PI), '#7a3a2a', 0, 1.5, 0.255, { ...o, r: [0, 0, Math.PI], cast: false });
+  if (c.vip) { ol(mesh(cyl(0.2, 0.24, 0.07, 16), '#f2b33d', 0, 1.9, -0.02, o)); mesh(sph(0.05), '#f2b33d', 0, 1.96, -0.02, o); }
   return { g, mouth };
 }
 
@@ -262,7 +342,7 @@ function syncCustomers(dt, t) {
     e.g.rotation.y = dist > 0.3 ? Math.atan2(target.x - e.g.position.x, target.z - e.g.position.z) : Math.PI - 0.35;
     const angry = c.patience / c.maxPatience < 0.33;
     e.mouth.rotation.z = angry ? 0 : Math.PI;
-    e.mouth.position.y = angry ? 1.43 : 1.46;
+    e.mouth.position.y = angry ? 1.47 : 1.5;
   });
   for (const [id, e] of custs) {
     if (live.has(id)) continue;
@@ -425,7 +505,7 @@ const VIEWS = {
   montagem: { pos: V(1.55, 2.45, -1.7), tgt: V(0.75, 1.25, 0.45), fov: 40 },
   horta:    { pos: V(7.9, 5.4, 6.4),  tgt: V(7.9, 0.0, 0.0),   fov: 38 },
   mercado:  { pos: V(-1.0, 3.4, 8.0), tgt: V(-1.0, 1.6, -1),   fov: 40 },
-  jade:     { pos: V(-0.6, 2.5, 2.9), tgt: V(-1.25, 1.45, 0.15), fov: 40 },
+  jade:     { pos: V(-1.2, 2.25, 2.6), tgt: V(-1.85, 1.55, 0.15), fov: 28 },
 };
 const camTgt = VIEWS.balcao.tgt.clone(), camPos = VIEWS.balcao.pos.clone();
 
@@ -562,18 +642,25 @@ function stepMover(obj, mv, dt) {
   mv.walking = mv.path.length > 0;
 }
 const inHorta = p => p.x > 4.5;
-const DOOR_IN = V(4.3, 0, -1.1), DOOR_OUT = V(4.8, 0, 2.5);
+// Dentro do café todos andam por um corredor atrás do balcão (z = -1.75),
+// longe da bancada e da Jade; para a horta, saem pela porta da direita.
+const CORR_Z = -1.75;
+const DOOR_IN = V(4.3, 0, CORR_Z), DOOR_OUT = V(4.8, 0, 2.5);
 function pathTo(from, to) {
   const pts = [];
-  if (inHorta(from) !== inHorta(to)) pts.push(...(inHorta(from) ? [DOOR_OUT, DOOR_IN] : [DOOR_IN, DOOR_OUT]).map(p => p.clone()));
+  const fh = inHorta(from), th = inHorta(to);
+  if (!fh && from.y < 0.5) pts.push(V(from.x, 0, CORR_Z));         // entra no corredor
+  if (!fh && th) pts.push(DOOR_IN.clone(), DOOR_OUT.clone());
+  else if (fh && !th) pts.push(DOOR_OUT.clone(), DOOR_IN.clone());
+  if (!th && to.y < 0.5) pts.push(V(to.x, 0, CORR_Z));             // sai do corredor
   pts.push(to.clone());
   return pts;
 }
 
 // Maria Alice: um lugar para cada estação
 const MARIA_AT = {
-  balcao: [V(-1.0, 0, -1.05), 0.35], mercado: [V(-1.0, 0, -1.05), 0.35], preparo: [V(-5.4, 0, -1.05), 0],
-  montagem: [V(0.25, 0, -0.9), 0.7], jade: [V(-2.0, 0, -1.0), 0.15], horta: [V(10.4, 0, 1.6), -2.2],
+  balcao: [V(-1.0, 0, -1.3), 0.35], mercado: [V(-1.0, 0, -1.3), 0.35], preparo: [V(-5.4, 0, -1.3), 0],
+  montagem: [V(0.2, 0, -1.25), 0.7], jade: [V(-1.7, 0, -1.3), 0.15], horta: [V(10.4, 0, 1.6), -2.2],
 };
 const mariaMove = { path: [], speed: 3.4, walking: false, face: 0.35 };
 let mariaStation = 'balcao', mariaAct = null; // { type, t, dur, i }
@@ -706,6 +793,8 @@ window.onGameEvent = (name, d) => {
 // ================= LOOP =================
 let last = performance.now(), blinkT = 2;
 function loop(now) {
+  // trava em ~60 fps: em telas de 120 Hz pula um quadro sim, outro não (economiza bateria)
+  if (now - last < 1000 / 62) return;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const t = now / 1000;
   const inGame = UI.screen === 'game' && G.run && G.s;
@@ -727,7 +816,8 @@ function loop(now) {
   for (const e of mEyes) e.scale.y = blinkT < 0.12 ? 0.1 : 1;
   if (blinkT < 0) blinkT = 2.5 + Math.random() * 2.5;
   const worried = inGame && G.run.customers.some(c => c.patience / c.maxPatience < 0.33);
-  mBrows.forEach((b, i) => { b.rotation.z = (i ? -1 : 1) * (worried ? -0.25 : 0.12) * -1; });
+  // sobrancelhas: levemente arqueadas; preocupada, sobem no meio
+  mBrows.forEach((b, i) => { const sx = i ? 1 : -1; b.rotation.z = Math.PI / 2 - sx * (worried ? -0.3 : 0.12); });
   smile.rotation.z = worried ? 0 : Math.PI;
 
   // Maria anda até a estação escolhida
@@ -741,8 +831,8 @@ function loop(now) {
   if (!walking) mariaRoot.rotation.y = lerpAngle(mariaRoot.rotation.y, mariaMove.face, Math.min(1, dt * 6));
   const stepPh = Math.sin(t * 11);
   maria.position.y = walking ? Math.abs(stepPh) * 0.06 : 0;
-  shoes[0].position.z = 0.12 + (walking ? stepPh * 0.14 : 0);
-  shoes[1].position.z = 0.12 - (walking ? stepPh * 0.14 : 0);
+  legs[0].rotation.x += ((walking ? stepPh * 0.55 : 0) - legs[0].rotation.x) * Math.min(1, dt * 14);
+  legs[1].rotation.x += ((walking ? -stepPh * 0.55 : 0) - legs[1].rotation.x) * Math.min(1, dt * 14);
   mCan.visible = inHorta(mariaRoot.position);
 
   // braços: andar, acenar, pegar, cortar, regar
