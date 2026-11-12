@@ -1,8 +1,9 @@
 // Service worker: guarda os arquivos para o jogo abrir offline
-const CACHE = 'cafe-da-horta-v10';
+const CACHE = 'cafe-da-horta-v11';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon-192.png', 'icon-512.png',
   'js/data.js', 'js/art.js', 'js/audio.js', 'js/game.js', 'js/events.js', 'js/ui.js',
-  '3d/', '3d/index.html', '3d/3d.css', '3d/world.js'];
+  '3d/', '3d/index.html', '3d/3d.css', '3d/world.js',
+  'sons/alerta.mp3', 'sons/colher.mp3', 'sons/confirma.mp3', 'sons/erro.mp3', 'sons/faca-1.mp3', 'sons/faca-2.mp3', 'sons/faca-3.mp3', 'sons/jade-gorjeio.mp3', 'sons/jade-resmunga.mp3', 'sons/jade-ronrona.mp3', 'sons/jade-uii-1.mp3', 'sons/jade-uii-2.mp3', 'sons/jade-uii-3.mp3', 'sons/moedas-1.mp3', 'sons/moedas-2.mp3', 'sons/sino.mp3', 'sons/soltar.mp3', 'sons/toque.mp3'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

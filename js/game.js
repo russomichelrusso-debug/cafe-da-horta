@@ -499,7 +499,7 @@ const G = {
     if (helping !== r.jadeHelping) {
       if (r.jadeHelping !== null) {
         UI.toast(helping ? 'Jade acordou e voltou a ajudar!' : 'Jade ficou com fome e foi dormir…');
-        if (helping) SFX.wheek(3); else SFX.purr(0.6);
+        if (helping) SFX.chirp(); else SFX.purr(0.6);
       }
       r.jadeHelping = helping;
       UI.dirty = true;

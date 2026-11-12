@@ -1,0 +1,17 @@
+Sons do Café da Horta
+=====================
+
+Jade (porquinho-da-índia) — gravações reais, Wikimedia Commons, DOMÍNIO PÚBLICO
+(autor: "The undertow", liberadas em domínio público pelo autor)
+  jade-uii-1/2/3.mp3  <- Guinea_Pig_Feeding_Wheek.ogg  https://commons.wikimedia.org/wiki/File:Guinea_Pig_Feeding_Wheek.ogg
+  jade-ronrona.mp3    <- Guinea_Pig_Happy.ogg          https://commons.wikimedia.org/wiki/File:Guinea_Pig_Happy.ogg
+  jade-resmunga.mp3   <- Guinea_Pig_Keep_Away.ogg      https://commons.wikimedia.org/wiki/File:Guinea_Pig_Keep_Away.ogg
+  jade-gorjeio.mp3    <- Guinea_Pig_Chirping.ogg       https://commons.wikimedia.org/wiki/File:Guinea_Pig_Chirping.ogg
+
+Efeitos — Kenney (www.kenney.nl), licença CC0 (Creative Commons Zero)
+  Interface Sounds: toque (select_001), soltar (drop_002), erro (error_004),
+                    colher (pluck_002), alerta (question_003), confirma (confirmation_001)
+  Impact Sounds:    faca-1/2/3 (impactWood_light_000/002/004), sino (impactBell_heavy_000)
+  Casino Audio:     moedas-1 (chips-stack-1), moedas-2 (chips-collide-2)
+
+Todos foram cortados, normalizados e convertidos para MP3 (mono, 96 kbps).

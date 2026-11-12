@@ -1,5 +1,5 @@
 'use strict';
-// ===== Efeitos sonoros sintetizados (sem arquivos de áudio = carrega instantâneo) =====
+// ===== Efeitos sonoros: sintetizados (reserva) + gravados (pasta /sons, no fim do arquivo) =====
 const SFX = {
   ctx: null,
   muted: false,
@@ -127,3 +127,62 @@ const SFX = {
   alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },
   blendTick(){ this.tone(90 + Math.random() * 30, 0.05, 'sawtooth', 0.03); },
 };
+
+// ===== Sons GRAVADOS (pasta /sons) =====
+// Jade: gravações reais de porquinho-da-índia (Wikimedia Commons, domínio público).
+// Interface, faca, moedas, sino: pacotes da Kenney (CC0). Veja sons/CREDITOS.txt.
+// Se um arquivo ainda não carregou, usa o som sintetizado acima como reserva.
+Object.assign(SFX, {
+  base: (window.MODO_3D ? '../' : '') + 'sons/',
+  buffers: {},
+  loading: false,
+  FILES: ['jade-uii-1', 'jade-uii-2', 'jade-uii-3', 'jade-ronrona', 'jade-resmunga', 'jade-gorjeio',
+    'toque', 'soltar', 'erro', 'colher', 'alerta', 'confirma', 'faca-1', 'faca-2', 'faca-3', 'sino', 'moedas-1', 'moedas-2'],
+  load() {
+    if (this.loading || !this.ctx) return;
+    this.loading = true;
+    for (const n of this.FILES) {
+      fetch(this.base + n + '.mp3')
+        .then(r => r.arrayBuffer())
+        .then(b => new Promise((ok, err) => this.ctx.decodeAudioData(b, ok, err)))  // forma com callback: funciona em iOS antigo
+        .then(buf => { this.buffers[n] = buf; })
+        .catch(() => { /* fica com o sintetizado */ });
+    }
+  },
+  // toca um arquivo; devolve false se ainda não está carregado (para usar a reserva)
+  play(name, vol = 1, rate = 1, delay = 0) {
+    if (this.muted || !this.ctx) return true;
+    const b = this.buffers[name];
+    if (!b) return false;
+    const s = this.ctx.createBufferSource(), g = this.ctx.createGain();
+    s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol;
+    s.connect(g).connect(this.ctx.destination);
+    s.start(this.ctx.currentTime + delay);
+    return true;
+  },
+  pick(list) { return list[Math.floor(Math.random() * list.length)]; },
+  vary() { return 0.94 + Math.random() * 0.12; },   // pequena variação para não soar repetido
+});
+{
+  const synth = {};
+  for (const k of ['unlock', 'tap', 'add', 'chop', 'coin', 'bad', 'bell', 'harvest', 'alarm', 'wheek', 'purr', 'grunt']) synth[k] = SFX[k];
+  SFX.unlock  = function () { synth.unlock.call(this); this.load(); };
+  SFX.tap     = function () { this.play('toque', 0.6) || synth.tap.call(this); };
+  SFX.add     = function () { this.play('soltar', 0.8, this.vary()) || synth.add.call(this); };
+  SFX.chop    = function () { this.play(this.pick(['faca-1', 'faca-2', 'faca-3']), 0.9, this.vary()) || synth.chop.call(this); };
+  SFX.coin    = function () { this.play(this.pick(['moedas-1', 'moedas-2']), 0.9, this.vary()) || synth.coin.call(this); };
+  SFX.bad     = function () { this.play('erro', 0.7) || synth.bad.call(this); };
+  SFX.bell    = function () { this.play('sino', 0.5, this.vary()) || synth.bell.call(this); };
+  SFX.harvest = function () { this.play('colher', 0.9, this.vary()) || synth.harvest.call(this); };
+  SFX.alarm   = function () { this.play('alerta', 0.9) || synth.alarm.call(this); };
+  // Jade: 1 = "uíí" curto, 2 = dupla, 3+ = sequência "uíí uíí uííí" (4 = sequência + mais um)
+  SFX.wheek = function (n = 3, urgent = false, delay = 0) {
+    const rate = (urgent ? 1.15 : 1) * this.vary();
+    const clip = n <= 1 ? 'jade-uii-1' : n === 2 ? 'jade-uii-2' : 'jade-uii-3';
+    if (!this.play(clip, 1, rate, delay)) return synth.wheek.call(this, n, urgent, delay);
+    if (n >= 4) this.play('jade-uii-1', 0.9, rate * 1.05, delay + 1.3);
+  };
+  SFX.purr  = function (dur = 1, delay = 0) { this.play('jade-ronrona', 0.9, this.vary(), delay) || synth.purr.call(this, dur, delay); };
+  SFX.grunt = function () { this.play('jade-resmunga', 1, this.vary()) || synth.grunt.call(this); };
+  SFX.chirp = function (delay = 0) { this.play('jade-gorjeio', 0.8, 1, delay) || this.wheek(2, false, delay); };
+}
