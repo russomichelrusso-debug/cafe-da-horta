@@ -144,7 +144,8 @@ const UI = {
       <div class="hud-r">
         ${r.phase === 'prep' ? `<span class="prep">Abre em <b id="prepLeft">${Math.ceil(r.prepLeft)}</b>s</span>
           <button class="btn sm go" data-act="open">Abrir portas</button>` : '<span class="prep open">Café aberto</span>'}
-        <button class="btn sm ghost" data-act="mute">${SFX.muted ? '🔇' : '🔊'}</button></div>`;
+        <button class="btn sm ghost" data-act="mute">${SFX.muted ? '🔇' : '🔊'}</button>
+        <button class="btn sm ghost" data-act="quit">✕ Sair</button></div>`;
   },
 
   renderTabs() {
@@ -397,6 +398,41 @@ const UI = {
     clearTimeout(this._sayT);
     this._sayT = setTimeout(() => { this.jadeLine = null; this.dirty = true; }, 2500);
   },
+  // Cartão com a nota detalhada, aparece ao servir
+  scoreCard(name, card) {
+    const L = { atendimento: '🧾 Atendimento', preparo: '⏱️ Preparo', precisao: '🎯 Precisão', entrega: '🍽️ Entrega' };
+    const el = document.createElement('div');
+    el.className = 'score-card ' + (card.total >= 70 ? 'good' : card.total >= 40 ? 'mid' : 'bad');
+    el.innerHTML = `<div class="sc-h">${name} <b>${card.total}</b></div>` +
+      Object.keys(NOTA_PESOS).map(k => {
+        const pts = Math.round(card.parts[k] * NOTA_PESOS[k]);
+        return `<div class="sc-row"><span>${L[k]}</span><i><em style="transform:scaleX(${card.parts[k]})"></em></i><b>${pts}/${NOTA_PESOS[k]}</b></div>`;
+      }).join('');
+    document.querySelectorAll('.score-card').forEach(x => x.remove());
+    this.el.fx.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  },
+
+  // Confirmação dentro do jogo (pausa enquanto aberta)
+  confirm(title, text, onYes) {
+    this.modal = true;
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.innerHTML = `<div class="modal-box"><h3>${title}</h3><p>${text}</p>
+      <div class="modal-btns"><button class="btn ghost" data-m="no">Continuar jogando</button>
+      <button class="btn big" data-m="yes">Sair</button></div></div>`;
+    m.addEventListener('click', e => {
+      const b = e.target.closest('[data-m]');
+      if (!b) return;
+      e.stopPropagation();
+      m.remove();
+      this.modal = false;
+      last = performance.now();
+      if (b.dataset.m === 'yes') onYes();
+    });
+    this.el.stage.appendChild(m);
+  },
+
   hearts() {
     for (let i = 0; i < 5; i++) {
       const h = document.createElement('div');
@@ -416,6 +452,11 @@ const ACTIONS = {
   next() { G.startDay(); UI.hideOverlay(); UI.station = 'balcao'; UI.dirty = true; },
   open() { G.openDoors(); },
   mute() { SFX.muted = !SFX.muted; UI.dirty = true; },
+  quit() {
+    UI.confirm('Sair para o menu?',
+      `O jogo fica salvo no começo do Dia ${G.s.day}. O que você fez hoje será perdido.`,
+      () => { UI.drag = null; G.run = null; UI.el.fx.innerHTML = ''; UI.showTitle(); });
+  },
   tab(id) { UI.go(id); },
   take(id) { G.takeOrder(+id); },
   select(id) { G.run.selected = +id; UI.go('montagem'); },
@@ -438,7 +479,7 @@ let last = performance.now(), acc = 0, paused = false;
 function frame(t) {
   const dt = Math.min(0.1, (t - last) / 1000);
   last = t;
-  if (!paused && UI.screen === 'game') {
+  if (!paused && !UI.modal && UI.screen === 'game' && G.run) {
     G.update(dt);
     acc += dt;
     if (acc >= 0.1) { acc = 0; UI.tick(); }

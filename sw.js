@@ -1,5 +1,5 @@
 // Service worker: guarda os arquivos para o jogo abrir offline
-const CACHE = 'cafe-da-horta-v1';
+const CACHE = 'cafe-da-horta-v2';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon-192.png', 'icon-512.png',
   'js/data.js', 'js/art.js', 'js/audio.js', 'js/game.js', 'js/ui.js'];
 

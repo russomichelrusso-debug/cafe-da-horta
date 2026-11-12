@@ -49,7 +49,7 @@ const G = {
   startDay() {
     const d = DIFF(this.s.day);
     this.run = {
-      phase: 'prep', prepLeft: d.prep, diff: d,
+      phase: 'prep', prepLeft: d.prep, diff: d, time: 0,
       customers: [], nextNum: 1, spawned: 0, spawnTimer: 2,
       served: 0, lost: 0, earned: 0, scores: [],
       selected: null, board: null, bought: {},
@@ -105,6 +105,8 @@ const G = {
       state: 'chegou', order: this.newOrder(),
       patience: pat, maxPatience: pat, alerted: false,
       plate: { items: [], blend: null },
+      // tempos (segundos de jogo) usados na nota
+      arrivedAt: r.time, takenAt: null, prepStartAt: null,
     });
     r.spawned++;
     SFX.bell();
@@ -115,6 +117,7 @@ const G = {
     const c = this.cust(id);
     if (!c || c.state !== 'chegou') return;
     c.state = 'esperando';
+    c.takenAt = this.run.time;
     c.patience = Math.min(c.maxPatience, c.patience + c.maxPatience * 0.15);
     if (!this.run.selected) this.run.selected = c.id;
     SFX.tap();
@@ -134,6 +137,7 @@ const G = {
       if ((this.s.stock[ingId] || 0) <= 0) { UI.toast(`Acabou ${ING[ingId].nome.toLowerCase()}!`); SFX.bad(); return false; }
       this.s.stock[ingId]--;
     }
+    if (c.prepStartAt === null) c.prepStartAt = this.run.time; // começou a preparar
     c.plate.items.push(ingId);
     SFX.add();
     UI.dirty = true;
@@ -171,9 +175,11 @@ const G = {
     const c = this.selectedCust();
     if (!c || !c.plate.items.length) return;
     if (c.order.recipe === 'suco' && c.plate.blend === null) { UI.toast('Bata o suco antes de servir!'); return; }
-    const score = clamp(Math.round(scoreDish(c.order, c.plate)), 0, 100);
+    const card = scoreDish(c, this.run.time);
+    const score = card.total;
     const rec = RECIPES[c.order.recipe];
     const ratio = c.patience / c.maxPatience;
+    UI.scoreCard(c.name, card);
     const tip = score >= 70 ? Math.round(rec.preco * 0.6 * ratio) : 0;
     const gain = Math.round(rec.preco * score / 100) + tip;
     this.s.coins += gain;
@@ -182,7 +188,7 @@ const G = {
     this.run.scores.push(score);
     this.leave(c, score >= 70 ? 'feliz' : score >= 40 ? 'ok' : 'bravo',
       `${score >= 90 ? '😍' : score >= 70 ? '🙂' : score >= 40 ? '😐' : '😠'} +${gain}`);
-    UI.toast(`${c.name}: nota ${score}${tip ? ` · gorjeta ${tip}` : ''}`);
+    if (tip) UI.toast(`Gorjeta de ${c.name}: +${tip}`);
     SFX.coin();
   },
 
@@ -297,6 +303,7 @@ const G = {
   update(dt) {
     const r = this.run;
     if (!r || r.phase === 'night') return;
+    r.time += dt;
 
     if (r.phase === 'prep') {
       r.prepLeft -= dt;
@@ -405,12 +412,50 @@ const G = {
   },
 };
 
-// ===== Nota do prato (0 a 100) =====
-// order: { recipe:'sanduiche', layers:[ids de baixo p/ cima] }
-//     ou { recipe:'salada'|'suco', counts:{ id: quantidade } }
-// plate: { items:[ids na ordem em que foram colocados], blend: null | 0..1 }
-function scoreDish(order, plate) {
-  // TODO(human): calcular a nota do prato comparando order com plate.
-  // Valor provisório para o jogo rodar: 100 se tiver algo no prato.
-  return plate.items.length ? 100 : 0;
+// ===== Nota do atendimento (0 a 100) =====
+// Quatro critérios, cada um de 0 a 1, com pesos:
+//   Atendimento  15  rapidez para anotar o pedido depois que o cliente chegou
+//   Preparo      20  tempo do 1º ingrediente até servir, comparado ao esperado
+//   Precisão     50  ingredientes certos (e na ordem, no sanduíche; ponto do suco)
+//   Entrega      15  paciência que o cliente ainda tinha ao receber
+const NOTA_PESOS = { atendimento: 15, preparo: 20, precisao: 50, entrega: 15 };
+
+// 1 até `ok` segundos, cai linearmente até 0 em `zero` segundos
+const timeScore = (t, ok, zero) => clamp(1 - (t - ok) / (zero - ok), 0, 1);
+
+function precisionScore(order, plate) {
+  if (order.recipe === 'sanduiche') {
+    // camada por camada: cada posição só vale se for o ingrediente certo
+    const want = order.layers, got = plate.items;
+    let hits = 0;
+    for (let i = 0; i < want.length; i++) if (got[i] === want[i]) hits++;
+    return hits / Math.max(want.length, got.length);
+  }
+  // salada e suco: o que faltou e o que sobrou contam como erro
+  const got = countItems(plate.items);
+  const ids = new Set([...Object.keys(order.counts), ...Object.keys(got)]);
+  let wrong = 0, total = 0;
+  for (const id of ids) {
+    const w = order.counts[id] || 0;
+    wrong += Math.abs(w - (got[id] || 0));
+    total += w;
+  }
+  const p = clamp(1 - wrong / total, 0, 1);
+  return order.recipe === 'suco' ? p * 0.7 + (plate.blend || 0) * 0.3 : p;
+}
+
+function scoreDish(c, now) {
+  const n = c.plate.items.length;
+  const esperado = 3 + n * 1.5 + (c.order.recipe === 'suco' ? 3 : 0); // segundos de preparo
+  const parts = {
+    atendimento: timeScore(c.takenAt - c.arrivedAt, 3, 15),
+    preparo: timeScore(now - (c.prepStartAt ?? now), esperado, esperado * 2.5),
+    precisao: precisionScore(c.order, c.plate),
+    entrega: clamp((c.patience / c.maxPatience) / 0.6, 0, 1),
+  };
+  let total = 0;
+  for (const k in NOTA_PESOS) total += parts[k] * NOTA_PESOS[k];
+  // Prato errado não pode tirar nota alta só por ser rápido
+  if (parts.precisao < 0.5) total = Math.min(total, 49);
+  return { total: Math.round(total), parts };
 }
