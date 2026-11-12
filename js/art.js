@@ -90,8 +90,22 @@ function mariaSVG(expr = 'feliz') {
 }
 
 // ----- Jade: porquinha-da-índia laranja com faixa branca no focinho -----
-// expr: 'feliz' | 'sono' | 'comendo'
-function jadeSVG(expr = 'feliz') {
+// Acessórios desenhados por cima da Jade (coordenadas do viewBox 220x150)
+const JADE_ACC = {
+  lacinho: `<g transform="translate(116 36) rotate(20)">
+    <path d="M0 0L-17 -11L-15 11Z" fill="#ff6fa5"/><path d="M0 0L17 -11L15 11Z" fill="#ff6fa5"/>
+    <circle r="5.5" fill="#e0457f"/></g>`,
+  chapeu: `<g transform="rotate(-8 72 30)">
+    <circle cx="56" cy="22" r="13" fill="#fff" stroke="#ddd" stroke-width="2"/><circle cx="88" cy="22" r="13" fill="#fff" stroke="#ddd" stroke-width="2"/>
+    <circle cx="72" cy="14" r="15" fill="#fff" stroke="#ddd" stroke-width="2"/>
+    <rect x="48" y="26" width="48" height="16" rx="4" fill="#fff" stroke="#ddd" stroke-width="2"/></g>`,
+  cachecol: `<path d="M30 108Q72 136 120 100" stroke="#d1495b" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <path d="M30 108Q72 136 120 100" stroke="#f2b33d" stroke-width="3" stroke-dasharray="6 10" fill="none"/>
+    <path d="M98 114L110 140L120 136L106 112Z" fill="#d1495b"/>`,
+};
+
+// expr: 'feliz' | 'sono' | 'comendo'; acc: acessório vestido (padrão: o do save)
+function jadeSVG(expr = 'feliz', acc = (typeof G !== 'undefined' && G.s) ? G.s.acessorio : null) {
   return `<svg class="jade ${expr}" viewBox="0 0 220 150">
   <ellipse cx="114" cy="140" rx="82" ry="8" fill="#000" opacity=".12"/>
   <path d="M30 100C30 55 75 35 125 38C175 42 202 70 198 105C196 128 172 138 120 138C70 138 30 130 30 100Z" fill="#d9822b"/>
@@ -116,6 +130,7 @@ function jadeSVG(expr = 'feliz') {
     <path d="M58 100L30 96M58 103L32 106M84 100L112 95M84 103L110 106"/></g>
   <ellipse cx="58" cy="135" rx="11" ry="5" fill="#f1a9a0"/><ellipse cx="90" cy="136" rx="11" ry="5" fill="#f1a9a0"/>
   <ellipse cx="170" cy="134" rx="10" ry="5" fill="#f1a9a0"/>
+  ${JADE_ACC[acc] || ''}
 </svg>`;
 }
 

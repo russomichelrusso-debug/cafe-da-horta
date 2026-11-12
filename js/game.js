@@ -31,7 +31,45 @@ const G = {
         { crop: null }, { crop: null },
       ],
       jade: { fome: 70, alegria: 70 },
+      up: {}, acessorios: [], acessorio: null,
     };
+  },
+
+  // ---------- Melhorias ----------
+  lvl(id) { return (this.s && this.s.up[id]) || 0; },
+  maxSpots() { return MAX_SPOTS + this.lvl('balcao'); },
+  chopsNeeded() { return 5 - this.lvl('faca'); },
+  blendZone() { return this.lvl('liquid') ? [0.55, 0.87] : [0.62, 0.82]; },
+
+  buyUpgrade(id) {
+    const u = UPGRADES.find(x => x.id === id);
+    const n = this.lvl(id);
+    if (!u || n >= u.precos.length) return;
+    const p = u.precos[n];
+    if (this.s.coins < p) { UI.toast('Moedas insuficientes!'); SFX.bad(); return; }
+    this.s.coins -= p;
+    this.s.up[id] = n + 1;
+    if (id === 'canteiro') this.s.plots.push({ crop: null });
+    UI.toast(`${u.nome}: ${u.desc[n]}`);
+    SFX.coin();
+    this.save();
+  },
+
+  // Comprar ou vestir/tirar um acessório da Jade
+  tapAcessorio(id) {
+    const a = ACESSORIOS.find(x => x.id === id);
+    if (!a) return;
+    if (!this.s.acessorios.includes(id)) {
+      if (this.s.coins < a.preco) { UI.toast('Moedas insuficientes!'); SFX.bad(); return; }
+      this.s.coins -= a.preco;
+      this.s.acessorios.push(id);
+      this.s.acessorio = id;
+      SFX.coin();
+    } else {
+      this.s.acessorio = this.s.acessorio === id ? null : id;
+      SFX.squeak();
+    }
+    this.save();
   },
 
   save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); } catch (e) { /* modo privado */ } },
@@ -43,6 +81,10 @@ const G = {
 
   startGame(continuar) {
     this.s = (continuar && this.load()) || this.newState();
+    // saves antigos (antes da loja) não têm estes campos
+    this.s.up = this.s.up || {};
+    this.s.acessorios = this.s.acessorios || [];
+    if (this.s.acessorio === undefined) this.s.acessorio = null;
     this.startDay();
   },
 
@@ -163,8 +205,7 @@ const G = {
     this.run.blend = null;
     const c = this.selectedCust();
     if (!c) return;
-    // zona verde = 62%..82%
-    const lo = 0.62, hi = 0.82;
+    const [lo, hi] = this.blendZone(); // faixa verde
     const dist = b.p < lo ? lo - b.p : b.p > hi ? b.p - hi : 0;
     c.plate.blend = b.p >= 1 ? 0.2 : clamp(1 - dist * 4, 0, 1);
     UI.toast(c.plate.blend >= 0.95 ? 'Batido no ponto!' : b.p >= 1 ? 'Bateu demais!' : b.p < lo ? 'Ficou pedaçudo…' : 'Quase no ponto.');
@@ -217,7 +258,7 @@ const G = {
     if (!b) return;
     b.chops++;
     SFX.chop();
-    if (b.chops >= 5) {
+    if (b.chops >= this.chopsNeeded()) {
       const ing = ING[b.id];
       this.s.stock[ing.cutTo] = (this.s.stock[ing.cutTo] || 0) + ing.cutYield;
       UI.toast(`+${ing.cutYield} ${ING[ing.cutTo].nome.toLowerCase()}`);
@@ -311,22 +352,24 @@ const G = {
     }
 
     // Horta (só cresce regada)
+    const drain = WATER_DRAIN * (this.lvl('irrigacao') ? 0.6 : 1);
+    const growRate = this.lvl('adubo') ? 1.3 : 1;
     for (const p of this.s.plots) {
       if (p.stage !== 'growing') continue;
-      p.water -= WATER_DRAIN * dt;
+      p.water -= drain * dt;
       if (p.water <= 0) {
         p.water = 0; p.dry += dt;
         if (p.dry > DRY_LIMIT) { p.stage = 'murcho'; UI.toast(`${CROPS[p.crop].nome} murchou!`); SFX.bad(); UI.dirty = true; }
       } else {
-        p.dry = 0; p.grow += dt;
+        p.dry = 0; p.grow += dt * growRate;
         if (p.grow >= CROPS[p.crop].tempo) { p.stage = 'pronto'; UI.dirty = true; }
       }
     }
 
     // Jade: fome e alegria caem com o tempo
     const j = this.s.jade;
-    j.fome = Math.max(0, j.fome - 0.22 * dt);
-    j.alegria = Math.max(0, j.alegria - 0.12 * dt);
+    j.fome = Math.max(0, j.fome - 0.22 * (this.lvl('casinha') ? 0.6 : 1) * dt);
+    j.alegria = Math.max(0, j.alegria - 0.12 * (this.lvl('brinquedos') ? 0.5 : 1) * dt);
     r.petCooldown = Math.max(0, r.petCooldown - dt);
     const helping = this.jadeHelping();
     if (helping !== r.jadeHelping) {
@@ -363,7 +406,7 @@ const G = {
 
     // Chegada de clientes
     r.spawnTimer -= dt;
-    if (r.spawnTimer <= 0 && r.spawned < r.diff.total && r.customers.length < MAX_SPOTS) {
+    if (r.spawnTimer <= 0 && r.spawned < r.diff.total && r.customers.length < this.maxSpots()) {
       this.spawnCustomer();
       r.spawnTimer = r.diff.intervalo * (0.8 + Math.random() * 0.4);
     }

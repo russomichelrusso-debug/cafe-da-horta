@@ -87,9 +87,47 @@ const UI = {
         ${r.gift ? `<p class="gift">${ic(r.gift)} A Jade achou uma semente de ${CROPS[r.gift].nome.toLowerCase()}!</p>`
                  : `<p class="gift">A Jade estava com fome e não achou nada hoje.</p>`}
         <p class="hint">${r.failed ? 'Você perdeu 3 clientes. Tente o mesmo dia de novo.' : `Amanhã é o dia ${s.day}: mais clientes e menos paciência.`}</p>
-        <button class="btn big" data-act="next">${r.failed ? 'Tentar de novo' : 'Dormir e abrir o café'}</button>
+        <div class="night-btns">
+          <button class="btn big ghost" data-act="shop">🛍️ Loja · 🪙 ${s.coins}</button>
+          <button class="btn big" data-act="next">${r.failed ? 'Tentar de novo' : 'Dormir e abrir o café'}</button>
+        </div>
       </div>
       <div class="night-art">${jadeSVG('sono')}</div>`;
+  },
+
+  // ---------- Loja de melhorias (à noite) ----------
+  shopTab: 'cozinha',
+  showShop() {
+    const s = G.s, tab = this.shopTab;
+    const tabs = [['cozinha', '🔪 Cozinha'], ['horta', '🌱 Horta'], ['jade', '🐹 Jade']];
+    const cards = UPGRADES.filter(u => u.aba === tab).map(u => {
+      const n = G.lvl(u.id), max = n >= u.precos.length;
+      const p = max ? 0 : u.precos[n];
+      const dots = u.precos.map((_, i) => i < n ? '●' : '○').join('');
+      return `<div class="up-card ${max ? 'max' : ''}">
+        <div class="up-em">${u.em}</div>
+        <div class="up-txt"><b>${u.nome}</b><span class="up-lv">${dots}</span>
+          <small>${max ? 'Nível máximo! ' + u.desc[n - 1] : u.desc[n]}</small></div>
+        ${max ? '<span class="up-ok">✓</span>'
+              : `<button class="btn go" data-act="upgrade" data-arg="${u.id}" ${s.coins < p ? 'disabled' : ''}>🪙 ${p}</button>`}
+      </div>`;
+    }).join('');
+    const accs = tab !== 'jade' ? '' : `<div class="acc-row">
+      <div class="acc-jade">${jadeSVG('feliz')}</div>
+      ${ACESSORIOS.map(a => {
+        const own = s.acessorios.includes(a.id), on = s.acessorio === a.id;
+        return `<button class="acc ${on ? 'on' : ''}" data-act="acc" data-arg="${a.id}" ${!own && s.coins < a.preco ? 'disabled' : ''}>
+          <span>${a.em}</span><b>${a.nome}</b><small>${own ? (on ? 'Vestindo · tirar' : 'Vestir') : '🪙 ' + a.preco}</small></button>`;
+      }).join('')}</div>`;
+    this.el.overlay.className = 'shop';
+    this.el.overlay.innerHTML = `
+      <div class="shop-box">
+        <div class="shop-h"><h2>Loja de melhorias</h2><span class="pill">🪙 ${s.coins}</span>
+          <button class="btn" data-act="shopback">← Voltar</button></div>
+        <div class="shop-tabs">${tabs.map(([id, nome]) =>
+          `<button class="tab ${tab === id ? 'on' : ''}" data-act="shoptab" data-arg="${id}">${nome}</button>`).join('')}</div>
+        <div class="up-grid">${cards}</div>${accs}
+      </div>`;
   },
 
   hideOverlay() { this.el.overlay.className = 'hidden'; this.el.overlay.innerHTML = ''; },
@@ -99,7 +137,7 @@ const UI = {
     this.dirty = false;
     if (this.screen !== 'game' || !G.run) return;
     if (G.run.phase === 'night') {
-      if (this.el.overlay.className !== 'night') this.showNight();
+      if (this.el.overlay.className !== 'night' && this.el.overlay.className !== 'shop') this.showNight();
       return;
     }
     this.renderHud();
@@ -193,7 +231,7 @@ const UI = {
     const r = G.run;
     const worried = r.customers.some(c => c.patience / c.maxPatience < 0.33);
     const spots = [];
-    for (let i = 0; i < MAX_SPOTS; i++) spots.push(r.customers[i] || r.leaving[i - r.customers.length] && { leaving: r.leaving[i - r.customers.length] });
+    for (let i = 0; i < G.maxSpots(); i++) spots.push(r.customers[i] || r.leaving[i - r.customers.length] && { leaving: r.leaving[i - r.customers.length] });
     return `
       <div class="cafe-wall"><div class="sign">Café da Horta</div><div class="window"></div><div class="plant-shelf">${ic('alface')}${ic('morango')}${ic('cenoura')}</div></div>
       <div class="maria-spot">${mariaSVG(worried ? 'preoc' : 'feliz')}</div>
@@ -223,8 +261,8 @@ const UI = {
         ${raw.map(id => `<button class="bin" data-act="board" data-arg="${id}" ${s.stock[id] ? '' : 'disabled'}>
           ${ic(id)}<span>${ING[id].nome}</span><b>${s.stock[id] || 0}</b></button>`).join('')}</div>
       <button class="board ${b ? 'full' : ''}" data-act="chop">
-        ${b ? `<div class="on-board c${b.chops}">${ic(b.chops >= 3 ? ING[b.id].cutTo : b.id)}</div>
-               <div class="chops">${'●'.repeat(b.chops)}${'○'.repeat(5 - b.chops)}</div>
+        ${b ? `<div class="on-board c${b.chops}">${ic(b.chops >= G.chopsNeeded() / 2 ? ING[b.id].cutTo : b.id)}</div>
+               <div class="chops">${'●'.repeat(b.chops)}${'○'.repeat(G.chopsNeeded() - b.chops)}</div>
                <div class="knife">🔪</div><p>Toque para cortar!</p>`
              : '<p>Toque num legume para colocar na tábua</p>'}
       </button>
@@ -261,7 +299,7 @@ const UI = {
       <div class="bins">${bins}</div>
       <div class="drop" id="drop">${dish}<p class="drop-hint">${pl.items.length ? '' : 'Arraste ou toque nos ingredientes'}</p></div>
       <div class="actions">
-        ${juice ? `<div class="meter"><i class="zone"></i><i class="fill" data-bar="blend"></i></div>
+        ${juice ? `<div class="meter"><i class="zone" style="left:${G.blendZone()[0] * 100}%;width:${(G.blendZone()[1] - G.blendZone()[0]) * 100}%"></i><i class="fill" data-bar="blend"></i></div>
           <button class="btn blend-btn" data-hold="blend" ${pl.blend !== null || !pl.items.length ? 'disabled' : ''}>Segurar p/ bater</button>` : ''}
         <button class="btn ghost" data-act="trash" ${pl.items.length ? '' : 'disabled'}>🗑️ Lixo</button>
         <button class="btn go" data-act="serve" ${pl.items.length ? '' : 'disabled'}>Servir ✓</button>
@@ -451,6 +489,11 @@ const ACTIONS = {
     if (G.s.day === 1 && arg !== '1') setTimeout(() => UI.toast('Dica: vá à Horta e ao Preparo antes de abrir as portas!'), 600); },
   next() { G.startDay(); UI.hideOverlay(); UI.station = 'balcao'; UI.dirty = true; },
   open() { G.openDoors(); },
+  shop() { UI.showShop(); SFX.tap(); },
+  shoptab(id) { UI.shopTab = id; UI.showShop(); SFX.tap(); },
+  shopback() { UI.showNight(); SFX.tap(); },
+  upgrade(id) { G.buyUpgrade(id); UI.showShop(); },
+  acc(id) { G.tapAcessorio(id); UI.showShop(); },
   mute() { SFX.muted = !SFX.muted; UI.dirty = true; },
   quit() {
     UI.confirm('Sair para o menu?',

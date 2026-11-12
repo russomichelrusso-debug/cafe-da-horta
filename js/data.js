@@ -64,6 +64,25 @@ const JADE_FOOD = {
 const NOMES = ['Ana', 'Bia', 'Caio', 'Duda', 'Enzo', 'Fê', 'Gabi', 'Heitor', 'Isa', 'João',
   'Lara', 'Léo', 'Malu', 'Nina', 'Otto', 'Pedro', 'Rafa', 'Sofia', 'Théo', 'Vivi'];
 
+// ===== Loja de melhorias (comprada à noite) =====
+// Cada nível custa mais que o anterior; desc[i] = o que o nível i+1 faz
+const UPGRADES = [
+  { id: 'faca',       aba: 'cozinha', em: '🔪', nome: 'Faca afiada',          precos: [40, 90], desc: ['Corta com 4 toques', 'Corta com 3 toques'] },
+  { id: 'liquid',     aba: 'cozinha', em: '🌀', nome: 'Liquidificador turbo', precos: [60],     desc: ['Faixa verde do suco mais larga'] },
+  { id: 'balcao',     aba: 'cozinha', em: '🪑', nome: '4º lugar no balcão',   precos: [120],    desc: ['Até 4 clientes ao mesmo tempo (mais lucro e mais pressão)'] },
+  { id: 'canteiro',   aba: 'horta',   em: '🟫', nome: 'Canteiro extra',       precos: [50, 110], desc: ['Ganha o 5º canteiro', 'Ganha o 6º canteiro'] },
+  { id: 'irrigacao',  aba: 'horta',   em: '💧', nome: 'Irrigação',            precos: [70],     desc: ['A água seca 40% mais devagar'] },
+  { id: 'adubo',      aba: 'horta',   em: '🌿', nome: 'Adubo',                precos: [80],     desc: ['As plantas crescem 30% mais rápido'] },
+  { id: 'casinha',    aba: 'jade',    em: '🏠', nome: 'Casinha de madeira',   precos: [60],     desc: ['A fome da Jade cai 40% mais devagar'] },
+  { id: 'brinquedos', aba: 'jade',    em: '🧶', nome: 'Túnel e bolinha de feno', precos: [50],  desc: ['A alegria da Jade cai 50% mais devagar'] },
+];
+// Acessórios só visuais: compra uma vez, depois toca para vestir/tirar
+const ACESSORIOS = [
+  { id: 'lacinho',  em: '🎀', nome: 'Lacinho',        preco: 25 },
+  { id: 'chapeu',   em: '👨‍🍳', nome: 'Chapéu de chef', preco: 35 },
+  { id: 'cachecol', em: '🧣', nome: 'Cachecol',       preco: 30 },
+];
+
 // Dificuldade cresce a cada dia (modo desafio)
 function DIFF(day) {
   return {

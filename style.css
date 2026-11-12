@@ -92,7 +92,7 @@ button:disabled { opacity: .45; cursor: default; }
 .maria-spot { position: absolute; left: 14px; bottom: 60px; width: 160px; }
 .maria-spot svg { width: 160px; height: 224px; }
 .spots { position: absolute; left: 200px; right: 20px; bottom: 70px; display: flex; justify-content: space-around; }
-.spot { position: relative; width: 150px; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.spot { position: relative; flex: 0 1 150px; min-width: 0; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
 .spot .cust { width: 110px; height: 143px; }
 .spot .name { font-weight: 800; font-size: 13px; margin-bottom: 14px; }
 .spot .bar { bottom: 0; left: 20px; right: 20px; height: 7px; }
@@ -286,6 +286,32 @@ button:disabled { opacity: .45; cursor: default; }
 .night-grid b { font-size: 22px; } .night-grid span { font-size: 12px; opacity: .8; }
 .gift { display: flex; align-items: center; gap: 8px; font-weight: 700; } .gift .ic { width: 30px; height: 30px; }
 .night-art { width: 220px; } .night-art svg { width: 220px; height: 150px; animation: breathe 2.4s infinite; }
+
+.night-btns { display: flex; gap: 10px; }
+.night-btns .btn.big { min-width: 200px; }
+
+/* ----- Loja ----- */
+#overlay.shop { background: linear-gradient(#2a3a66, #3b3f75); }
+.shop-box { width: 900px; height: 410px; background: var(--creme); border-radius: 18px; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.shop-h { display: flex; align-items: center; gap: 12px; }
+.shop-h h2 { font-size: 24px; color: var(--vinho); margin-right: auto; }
+.shop-h .pill { background: #f3e2c6; font-size: 18px; }
+.shop-tabs { display: flex; gap: 8px; }
+.shop-tabs .tab { height: 40px; flex: 0 0 160px; }
+.up-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.up-card { background: #fff; border-radius: 14px; padding: 10px; display: flex; align-items: center; gap: 10px; box-shadow: var(--sombra); }
+.up-card.max { background: #e9f6e4; }
+.up-em { font-size: 34px; }
+.up-txt { flex: 1; display: flex; flex-direction: column; line-height: 1.2; }
+.up-txt small { font-size: 12px; opacity: .75; }
+.up-lv { color: #f2b33d; letter-spacing: 2px; font-size: 13px; }
+.up-ok { font-size: 26px; color: var(--verde); font-weight: 900; }
+.up-card .btn { padding: 8px 10px; white-space: nowrap; }
+.acc-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.acc-jade { width: 170px; } .acc-jade svg { width: 170px; height: 116px; }
+.acc { flex: 1; background: #fff; border-radius: 14px; padding: 8px; display: flex; flex-direction: column; align-items: center; box-shadow: var(--sombra); border: 3px solid transparent; }
+.acc span { font-size: 30px; } .acc small { font-size: 12px; opacity: .75; }
+.acc.on { border-color: #e35d8a; }
 
 /* Peça para girar no modo retrato */
 #rotate { display: none; position: fixed; inset: 0; background: #2f6b3a; color: #fff; z-index: 99; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-weight: 800; font-size: 20px; text-align: center; }
