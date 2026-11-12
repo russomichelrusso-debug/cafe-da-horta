@@ -131,8 +131,9 @@ const puddle = mesh(cyl(0.9, 0.9, 0.02, 24), '#6fb8ee', 7.9, 0.02, 2.4, { cast: 
 puddle.visible = false;
 
 // ================= MARIA ALICE =================
-const maria = group(-1.0, 0, -1.05);
-maria.rotation.y = 0.35;
+const mariaRoot = group(-1.0, 0, -1.05);   // anda pelo cenário
+mariaRoot.rotation.y = 0.35;
+const maria = group(0, 0, 0, mariaRoot);    // balança/abaixa
 const P = { p: maria };
 mesh(cyl(0.32, 0.6, 1.5, 24), '#8c2738', 0, 0.95, 0, P);
 mesh(box(0.56, 0.75, 0.04), '#fffaf3', 0, 1.15, 0.42, { ...P, r: [-0.18, 0, 0] });
@@ -142,6 +143,13 @@ const armL = group(-0.36, 1.68, 0.02, maria), armR = group(0.36, 1.68, 0.02, mar
 mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armL });
 mesh(cap(0.085, 0.55), '#efc3a4', 0, -0.36, 0, { p: armR });
 armL.rotation.z = -0.25; armR.rotation.z = 0.25;
+const shoes = [-1, 1].map(sx => mesh(sph(0.1), '#6b3b2a', sx * 0.16, 0.06, 0.12, { ...P, s: [0.9, 0.6, 1.4] }));
+// regador na mão (aparece quando ela está na horta)
+const mCan = group(0, -0.74, 0.06, armR);
+mesh(cyl(0.12, 0.14, 0.22), '#4aa3df', 0, -0.08, 0, { p: mCan });
+mesh(cyl(0.02, 0.025, 0.32), '#4aa3df', 0, -0.02, 0.17, { p: mCan, r: [1.0, 0, 0] });
+const spout = group(0, 0.08, 0.32, mCan);
+mCan.visible = false;
 mesh(cyl(0.1, 0.12, 0.22), '#efc3a4', 0, 1.8, 0, P);
 const head = group(0, 2.22, 0, maria);
 const H = { p: head };
@@ -208,6 +216,11 @@ mesh(cyl(0.15, 0.15, 0.12), '#ffffff', 0, 0.6, 0.27, { p: ACC.chapeu });
 for (const [x, z] of [[-0.08, 0.24], [0.08, 0.24], [0, 0.33]]) mesh(sph(0.11), '#ffffff', x, 0.72, z, { p: ACC.chapeu });
 mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), '#d1495b', 0, 0.2, 0.33, { p: ACC.cachecol, r: [Math.PI / 2 - 0.3, 0, 0] });
 mesh(box(0.08, 0.2, 0.04), '#d1495b', 0.12, 0.08, 0.48, { p: ACC.cachecol, r: [0.2, 0, 0.2] });
+// regadorzinho que a Jade carrega quando vai à horta
+const jCan = group(0, 0.5, -0.15, jBody);
+mesh(cyl(0.07, 0.08, 0.13), '#4aa3df', 0, 0, 0, { p: jCan });
+mesh(cyl(0.012, 0.015, 0.18), '#4aa3df', 0, 0.02, 0.1, { p: jCan, r: [1.0, 0, 0] });
+jCan.visible = false;
 const zzz = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('z z z', null, '#6b7fa6', 256, 96, 64), transparent: true }));
 zzz.scale.set(0.5, 0.19, 1); zzz.position.set(0.25, 0.85, 0.2); jade.add(zzz);
 
@@ -536,6 +549,160 @@ document.getElementById('stage').addEventListener('click', e => {
   }
 });
 
+// ================= MOVIMENTO =================
+const lerpAngle = (a, b, k) => { let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
+function stepMover(obj, mv, dt) {
+  if (!mv.path.length) { mv.walking = false; return; }
+  const tgt = mv.path[0];
+  const d = tgt.clone().sub(obj.position);
+  const dist = d.length(), step = mv.speed * dt;
+  if (Math.hypot(d.x, d.z) > 0.05) obj.rotation.y = lerpAngle(obj.rotation.y, Math.atan2(d.x, d.z), Math.min(1, dt * 10));
+  if (dist <= step) { obj.position.copy(tgt); mv.path.shift(); }
+  else obj.position.add(d.multiplyScalar(step / dist));
+  mv.walking = mv.path.length > 0;
+}
+const inHorta = p => p.x > 4.5;
+const DOOR_IN = V(4.3, 0, -1.1), DOOR_OUT = V(4.8, 0, 2.5);
+function pathTo(from, to) {
+  const pts = [];
+  if (inHorta(from) !== inHorta(to)) pts.push(...(inHorta(from) ? [DOOR_OUT, DOOR_IN] : [DOOR_IN, DOOR_OUT]).map(p => p.clone()));
+  pts.push(to.clone());
+  return pts;
+}
+
+// Maria Alice: um lugar para cada estação
+const MARIA_AT = {
+  balcao: [V(-1.0, 0, -1.05), 0.35], mercado: [V(-1.0, 0, -1.05), 0.35], preparo: [V(-5.4, 0, -1.05), 0],
+  montagem: [V(0.25, 0, -0.9), 0.7], jade: [V(-2.0, 0, -1.0), 0.15], horta: [V(10.4, 0, 1.6), -2.2],
+};
+const mariaMove = { path: [], speed: 3.4, walking: false, face: 0.35 };
+let mariaStation = 'balcao', mariaAct = null; // { type, t, dur, i }
+function mariaGo(pos, face) { mariaMove.path = pathTo(mariaRoot.position, pos); mariaMove.face = face; }
+function mariaDo(type, dur, extra = {}) { mariaAct = { type, t: 0, dur, ...extra }; }
+const plotFront = i => { const p = plotPos(i); return V(p.x + 0.75, 0, p.z + 0.95); }; // ao lado, sem tapar a planta
+const PLOT_FACE = Math.PI + 0.6;
+
+// Jade: viagem até a horta para regar
+const jadeMove = { path: [], speed: 3.2, walking: false };
+let jadeTrip = null; // { phase: 'ida'|'rega'|'volta', i, t }
+const JADE_EDGE = V(-2.35, TOP, -0.55), JADE_FLOOR = V(-2.35, 0, -0.85); // desce pela parte de trás do balcão
+
+// ================= PARTÍCULAS E TEXTOS FLUTUANTES =================
+const parts = [], floats = [], flights = [];
+const partGeo = sph(1, 8, 6);
+function spawn(pos, vel, color, life = 1, size = 0.05, grav = -9) {
+  const m = new THREE.Mesh(partGeo, M(color));
+  m.scale.setScalar(size); m.position.copy(pos); m.castShadow = false;
+  scene.add(m);
+  parts.push({ m, vel: vel.clone(), life, max: life, grav, size });
+}
+const rnd3 = (a = 1) => V((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+const texCache = {};
+function floatText(text, pos, fg = '#3b2a1e', bg = '#ffffff', delay = 0) {
+  const key = text + fg + bg;
+  const tex = texCache[key] || (texCache[key] = textTexture(text, bg, fg, 256, 96, 58));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  s.scale.set(0.75, 0.28, 1); s.position.copy(pos); s.renderOrder = 10;
+  s.visible = delay <= 0;
+  scene.add(s);
+  floats.push({ s, life: 1.6, delay });
+}
+function updateFx(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= dt; p.vel.y += p.grav * dt;
+    p.m.position.addScaledVector(p.vel, dt);
+    if (p.m.position.y < 0.02 && p.grav < 0) { p.m.position.y = 0.02; p.vel.set(0, 0, 0); }
+    p.m.scale.setScalar(p.size * Math.min(1, p.life / (p.max * 0.4)));
+    if (p.life <= 0) { scene.remove(p.m); parts.splice(i, 1); }
+  }
+  for (let i = floats.length - 1; i >= 0; i--) {
+    const f = floats[i];
+    if (f.delay > 0) { f.delay -= dt; f.s.visible = f.delay <= 0; continue; }
+    f.life -= dt; f.s.position.y += dt * 0.7;
+    f.s.material.opacity = Math.min(1, f.life / 0.5);
+    if (f.life <= 0) { scene.remove(f.s); f.s.material.dispose(); floats.splice(i, 1); }
+  }
+  for (let i = flights.length - 1; i >= 0; i--) {
+    const f = flights[i];
+    f.t += dt * 1.8;
+    const k = Math.min(1, f.t);
+    f.o.position.lerpVectors(f.from, f.to, k);
+    f.o.position.y += Math.sin(k * Math.PI) * 0.6;
+    f.o.scale.setScalar(1 - k * 0.6);
+    if (f.t >= 1) { scene.remove(f.o); flights.splice(i, 1); }
+  }
+}
+const CROP_COLOR = { alface: '#5fb548', tomate: '#e5412f', cenoura: '#f28a1c', morango: '#e3304a' };
+const FOOD_COLOR = { alface: '#5fb548', cenoura: '#f28a1c', morango: '#e3304a', tomate: '#e5412f' };
+let dropMesh = null, dropBase = 0, dropT = 0, lastDish = { id: null, n: 0 };
+
+// ================= REAÇÕES ÀS AÇÕES DO JOGO =================
+window.onGameEvent = (name, d) => {
+  const t0 = performance.now();
+  switch (name) {
+    case 'take': mariaDo('aceno', 0.7); break;
+    case 'add': mariaDo('pegar', 0.35); break;
+    case 'chop': knifeT = 1; break;
+    case 'serve': {
+      mariaDo('pegar', 0.4);
+      const e = custs.get(d.id);
+      if (!e) break;
+      const top = e.g.position.clone().add(V(0, 2.25, 0));
+      const ghost = dish.clone(true);
+      ghost.position.copy(dish.position);
+      scene.add(ghost);
+      flights.push({ o: ghost, from: dish.position.clone(), to: e.g.position.clone().add(V(0, 1.2, 0.1)), t: 0 });
+      floatText(d.score >= 90 ? '😍' : d.score >= 70 ? '🙂' : d.score >= 40 ? '😐' : '😠', top.clone().add(V(0, 0.35, 0)), '#000', null);
+      floatText(`+${d.gain}`, top, '#7a5200', '#ffe066', 0.25);
+      for (let i = 0; i < 10; i++) spawn(top, V((Math.random() - 0.5) * 2, 2 + Math.random() * 2, (Math.random() - 0.5) * 2), '#f2c14e', 0.9, 0.05);
+      break;
+    }
+    case 'water': mariaGo(plotFront(d.i), PLOT_FACE); mariaAct = { type: 'regar', t: 0, dur: 1.4, i: d.i, wait: true }; break;
+    case 'harvest': {
+      mariaGo(plotFront(d.i), PLOT_FACE);
+      const p = plotPos(d.i);
+      const col = d.ruim ? tint(CROP_COLOR[d.crop]) : CROP_COLOR[d.crop];
+      for (let i = 0; i < 7; i++) spawn(V(p.x, 0.5, p.z), V((Math.random() - 0.5) * 1.5, 3 + Math.random() * 1.5, 1.2 + Math.random()), col, 1.1, 0.09);
+      mariaAct = { type: 'abaixar', t: 0, dur: 0.6, wait: true };
+      break;
+    }
+    case 'plant': {
+      mariaGo(plotFront(d.i), PLOT_FACE);
+      const p = plotPos(d.i);
+      for (let i = 0; i < 10; i++) spawn(V(p.x, 0.3, p.z), V((Math.random() - 0.5) * 2, 1.5 + Math.random(), (Math.random() - 0.5) * 2), '#7a4f2c', 0.7, 0.05);
+      mariaAct = { type: 'abaixar', t: 0, dur: 0.6, wait: true };
+      break;
+    }
+    case 'pest': {
+      const p = plotPos(d.i);
+      for (let i = 0; i < 8; i++) spawn(V(p.x, 0.7, p.z + 0.15), V((Math.random() - 0.5) * 3, 2 + Math.random() * 2, (Math.random() - 0.5) * 3), '#7cc14e', 1, 0.05);
+      mariaGo(plotFront(d.i), PLOT_FACE);
+      mariaAct = { type: 'abaixar', t: 0, dur: 0.5, wait: true };
+      break;
+    }
+    case 'feed': {
+      const h = jHead.localToWorld(V(0, 0.28, 0.75));
+      for (let i = 0; i < 4; i++) spawn(h.clone().add(rnd3(0.12)), V(0, 0, 0), FOOD_COLOR[d.id] || '#5fb548', 0.6 + i * 0.12, 0.06, 0);
+      break;
+    }
+    case 'pet': {
+      const top = jade.position.clone().add(V(0, 1.0, 0));
+      for (let i = 0; i < 3; i++) floatText('💗', top.clone().add(V((i - 1) * 0.3, 0, 0)), '#000', null, i * 0.2);
+      mariaDo('pegar', 0.5);
+      break;
+    }
+    case 'jadeRegou': {
+      if (jadeTrip || jadeMove.walking) break;
+      const f = plotFront(d.i);
+      jadeTrip = { phase: 'ida', i: d.i, t: 0 };
+      jadeMove.path = [JADE_EDGE.clone(), JADE_FLOOR.clone(), ...pathTo(JADE_FLOOR, V(f.x + 0.5, 0, f.z - 0.35))];
+      jCan.visible = true;
+      break;
+    }
+  }
+};
+
 // ================= LOOP =================
 let last = performance.now(), blinkT = 2;
 function loop(now) {
@@ -563,6 +730,45 @@ function loop(now) {
   mBrows.forEach((b, i) => { b.rotation.z = (i ? -1 : 1) * (worried ? -0.25 : 0.12) * -1; });
   smile.rotation.z = worried ? 0 : Math.PI;
 
+  // Maria anda até a estação escolhida
+  if (station !== mariaStation) {
+    mariaStation = station;
+    const [pos, face] = MARIA_AT[station] || MARIA_AT.balcao;
+    mariaGo(pos, face);
+  }
+  stepMover(mariaRoot, mariaMove, dt);
+  const walking = mariaMove.walking;
+  if (!walking) mariaRoot.rotation.y = lerpAngle(mariaRoot.rotation.y, mariaMove.face, Math.min(1, dt * 6));
+  const stepPh = Math.sin(t * 11);
+  maria.position.y = walking ? Math.abs(stepPh) * 0.06 : 0;
+  shoes[0].position.z = 0.12 + (walking ? stepPh * 0.14 : 0);
+  shoes[1].position.z = 0.12 - (walking ? stepPh * 0.14 : 0);
+  mCan.visible = inHorta(mariaRoot.position);
+
+  // braços: andar, acenar, pegar, cortar, regar
+  let arX = walking ? -stepPh * 0.45 : 0, alX = walking ? stepPh * 0.45 : 0, arZ = 0.25, bend = 0, canTilt = 0;
+  if (inGame && station === 'preparo' && !walking && G.run.board) arX = -0.7 - Math.max(0, knifeT) * 0.7;
+  if (mariaAct && !(mariaAct.wait && walking)) {
+    mariaAct.t += dt;
+    const ph = Math.min(1, mariaAct.t / mariaAct.dur), s = Math.sin(ph * Math.PI);
+    if (mariaAct.type === 'aceno') { arZ = 0.25 + s * 2.4; arX = -Math.sin(ph * Math.PI * 6) * 0.25; }
+    if (mariaAct.type === 'pegar') arX = -s * 1.1;
+    if (mariaAct.type === 'abaixar') { bend = s * 0.35; arX = -s * 0.9; alX = -s * 0.9; }
+    if (mariaAct.type === 'regar') {
+      arX = -1.1 * Math.min(1, ph * 4); canTilt = 0.7 * s;
+      if (Math.random() < 0.6) {
+        const sp = spout.getWorldPosition(V(0, 0, 0));
+        spawn(sp, V((Math.random() - 0.5) * 0.4, -0.5, 0.6 + Math.random() * 0.4).applyAxisAngle(V(0, 1, 0), mariaRoot.rotation.y), '#6fb8ee', 0.7, 0.035);
+      }
+    }
+    if (ph >= 1) mariaAct = null;
+  }
+  armR.rotation.x += (arX - armR.rotation.x) * Math.min(1, dt * 14);
+  armL.rotation.x += (alX - armL.rotation.x) * Math.min(1, dt * 14);
+  armR.rotation.z += (arZ - armR.rotation.z) * Math.min(1, dt * 14);
+  maria.rotation.x += (bend - maria.rotation.x) * Math.min(1, dt * 10);
+  mCan.rotation.x += (canTilt - mCan.rotation.x) * Math.min(1, dt * 10);
+
   // Jade
   const helping = inGame ? G.jadeHelping() : true;
   const eating = UI.jadeExpr === 'comendo';
@@ -572,8 +778,29 @@ function loop(now) {
   for (const e of jEyes) e.scale.y = helping ? (blinkT < 0.12 ? 0.15 : 1) : 0.15;
   zzz.visible = !helping;
   zzz.position.y = 0.85 + Math.sin(t * 2) * 0.05;
-  if (jadeHop > 0) { jadeHop -= dt * 1.6; jade.position.y = JADE_POS.y + Math.max(0, Math.sin((1 - jadeHop) * Math.PI)) * 0.35; }
-  else if (helping && Math.sin(t * 0.9) > 0.995) jadeHop = 1;   // pulinho de alegria de vez em quando
+  // Jade vai à horta regar e volta para o balcão
+  if (jadeTrip) {
+    stepMover(jade, jadeMove, dt);
+    jBody.position.y = jadeMove.walking ? Math.abs(Math.sin(t * 16)) * 0.08 : 0;
+    if (!jadeMove.walking) {
+      if (jadeTrip.phase === 'ida') { jadeTrip.phase = 'rega'; jadeTrip.t = 0; }
+      else if (jadeTrip.phase === 'rega') {
+        jadeTrip.t += dt;
+        const p = plotPos(jadeTrip.i);
+        jade.rotation.y = lerpAngle(jade.rotation.y, Math.atan2(p.x - jade.position.x, p.z - jade.position.z), Math.min(1, dt * 8));
+        jCan.rotation.x = 0.8;
+        if (Math.random() < 0.5) spawn(V(p.x + (Math.random() - 0.5) * 0.8, 1.0, p.z + (Math.random() - 0.5) * 0.8), V(0, -1, 0), '#6fb8ee', 0.6, 0.035);
+        if (jadeTrip.t > 1.2) {
+          jadeTrip.phase = 'volta'; jCan.rotation.x = 0;
+          jadeMove.path = [...pathTo(jade.position, JADE_FLOOR), JADE_EDGE.clone(), JADE_POS.clone()];
+        }
+      } else { jadeTrip = null; jCan.visible = false; }
+    }
+  } else {
+    jade.rotation.y = lerpAngle(jade.rotation.y, 0.55, Math.min(1, dt * 5));
+    if (jadeHop > 0) { jadeHop -= dt * 1.6; jBody.position.y = Math.max(0, Math.sin((1 - jadeHop) * Math.PI)) * 0.28; }
+    else { jBody.position.y = 0; if (helping && Math.sin(t * 0.9) > 0.995) jadeHop = 1; } // pulinho de alegria de vez em quando
+  }
   const acc = inGame ? G.s.acessorio : null;
   for (const [k2, g] of Object.entries(ACC)) g.visible = acc === k2;
 
@@ -585,7 +812,19 @@ function loop(now) {
     // prato / tigela / liquidificador do pedido selecionado
     const c = G.selectedCust();
     const dk = c ? `${c.id}|${c.order.recipe}|${c.plate.items.join(',')}|${c.plate.blend}` : 'none';
-    if (dk !== dishKey) { dishKey = dk; buildDish(c); }
+    if (dk !== dishKey) {
+      dishKey = dk;
+      const prevN = c && lastDish.id === c.id ? lastDish.n : -1;
+      buildDish(c);
+      lastDish = { id: c ? c.id : null, n: c ? c.plate.items.length : 0 };
+      // o ingrediente novo cai do alto no prato
+      if (c && c.plate.blend === null && c.plate.items.length === prevN + 1) {
+        const holder = jarContents || dish;
+        dropMesh = holder.children[holder.children.length - 1];
+        dropBase = dropMesh.position.y; dropT = 0.3;
+      }
+    }
+    if (dropMesh && dropT > 0) { dropT -= dt; dropMesh.position.y = dropBase + Math.pow(Math.max(0, dropT) / 0.3, 2) * 0.55; }
     if (jarContents) {
       const spinning = !!r.blend;
       jarContents.rotation.y += spinning ? dt * 25 : 0;
@@ -628,6 +867,7 @@ function loop(now) {
     setLabels([]);
   }
 
+  updateFx(dt);
   renderer.render(scene, camera);
 }
 
@@ -638,4 +878,4 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('DOMContentLoaded', () => { place(); renderer.setAnimationLoop(loop); });
 if (document.readyState !== 'loading') { place(); renderer.setAnimationLoop(loop); }
-window.__world = { scene, camera, VIEWS }; // para depuração
+window.__world = { scene, camera, VIEWS, jade, mariaRoot, get jadeTrip() { return jadeTrip; }, get parts() { return parts.length; } }; // para depuração

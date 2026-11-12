@@ -9,6 +9,9 @@ const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// Avisa a versão 3D (se existir) que uma ação aconteceu, para ela animar
+const fx = (name, data = {}) => { if (window.onGameEvent) try { window.onGameEvent(name, data); } catch (e) { console.error(e); } };
+
 function countItems(list) {
   const m = {};
   for (const id of list) m[id] = (m[id] || 0) + 1;
@@ -192,6 +195,7 @@ const G = {
     c.takenAt = this.run.time;
     c.patience = Math.min(c.maxPatience, c.patience + c.maxPatience * 0.15);
     if (!this.run.selected) this.run.selected = c.id;
+    fx('take', { id: c.id });
     SFX.tap();
     UI.dirty = true;
   },
@@ -212,6 +216,7 @@ const G = {
     }
     if (c.prepStartAt === null) c.prepStartAt = this.run.time; // começou a preparar
     c.plate.items.push(ingId);
+    fx('add', { ing: ingId });
     SFX.add();
     UI.dirty = true;
     return true;
@@ -266,6 +271,7 @@ const G = {
     r.earned += gain;
     r.served++;
     r.scores.push(score);
+    fx('serve', { id: c.id, score, gain });
     this.leave(c, score >= 70 ? 'feliz' : score >= 40 ? 'ok' : 'bravo',
       `${score >= 90 ? '😍' : score >= 70 ? '🙂' : score >= 40 ? '😐' : '😠'} +${gain}`);
     if (tip && !c.vip) UI.toast(`Gorjeta de ${c.name}: +${tip}`);
@@ -306,6 +312,7 @@ const G = {
     const b = this.run.board;
     if (!b) return;
     b.chops++;
+    fx('chop');
     SFX.chop();
     if (b.chops >= this.chopsNeeded()) {
       const ing = ING[b.id];
@@ -336,6 +343,7 @@ const G = {
     this.s.seeds[crop]--;
     this.s.plots[i] = { crop, stage: 'growing', grow: 0, water: 100, dry: 0 };
     UI.plotPick = null;
+    fx('plant', { i });
     SFX.add();
     UI.dirty = true;
   },
@@ -343,6 +351,7 @@ const G = {
     const p = this.s.plots[i];
     if (p.stage !== 'growing') return;
     p.water = 100; p.dry = 0;
+    fx('water', { i });
     SFX.water();
     UI.dirty = true;
   },
@@ -358,6 +367,7 @@ const G = {
       txt.push(`${n} ${ING[id].nome.toLowerCase()}`);
     }
     UI.toast(ruim ? `Colheu ${txt.join(', ')} passados (tiram pontos)` : `Colheu ${txt.join(', ')}`);
+    fx('harvest', { i, crop: p.crop, ruim });
     this.s.plots[i] = { crop: null };
     SFX.harvest();
     UI.dirty = true;
@@ -367,6 +377,7 @@ const G = {
     const p = this.s.plots[i];
     if (!p.praga) return;
     p.praga = false; p.pragaT = 0;
+    fx('pest', { i });
     UI.toast('Lagarta removida!');
     SFX.harvest();
     UI.dirty = true;
@@ -417,6 +428,7 @@ const G = {
     const j = this.s.jade;
     j.fome = clamp(j.fome + f.fome, 0, 100);
     j.alegria = clamp(j.alegria + f.alegria, 0, 100);
+    fx('feed', { id });
     UI.jadeSay(f.fala, 'comendo');
     SFX.squeak();
     UI.dirty = true;
@@ -425,6 +437,7 @@ const G = {
     if (this.run.petCooldown > 0) { UI.jadeSay('Jade quer comer, não só carinho…'); return; }
     this.run.petCooldown = 6;
     this.s.jade.alegria = clamp(this.s.jade.alegria + 12, 0, 100);
+    fx('pet');
     UI.jadeSay('Rrrrr… (ronronando)');
     UI.hearts();
     SFX.squeak();
@@ -492,7 +505,7 @@ const G = {
       if (r.jadeTimer <= 0) {
         r.jadeTimer = 8;
         const dry = this.s.plots.filter(p => p.stage === 'growing' && !p.praga && p.water < 45).sort((a, b) => a.water - b.water)[0];
-        if (dry) { dry.water = 100; dry.dry = 0; UI.toast(`Jade regou ${CROPS[dry.crop].nome.toLowerCase()}`); }
+        if (dry) { dry.water = 100; dry.dry = 0; fx('jadeRegou', { i: this.s.plots.indexOf(dry) }); UI.toast(`Jade regou ${CROPS[dry.crop].nome.toLowerCase()}`); }
       }
     }
 
