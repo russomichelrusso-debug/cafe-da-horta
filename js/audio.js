@@ -31,5 +31,6 @@ const SFX = {
   squeak() { this.tone(1400, 0.08, 'sine', 0.1, 600); this.tone(1700, 0.1, 'sine', 0.1, 500, 0.1); },
   harvest(){ this.tone(523, 0.08, 'triangle', 0.1); this.tone(784, 0.12, 'triangle', 0.1, 0, 0.07); },
   water()  { this.tone(300, 0.2, 'sine', 0.08, 300); },
+  alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },
   blendTick(){ this.tone(90 + Math.random() * 30, 0.05, 'sawtooth', 0.03); },
 };

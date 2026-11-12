@@ -1,5 +1,5 @@
 'use strict';
-// ===== Lógica do jogo: estado, dia, clientes, horta, Jade, salvamento =====
+// ===== Lógica do jogo: estado, dia, clientes, horta, Jade, desgaste, salvamento =====
 
 const SAVE_KEY = 'cafe-da-horta-v1';
 const MAX_SPOTS = 3;     // clientes no balcão ao mesmo tempo
@@ -24,6 +24,7 @@ const G = {
       day: 1, coins: 25, best: 0,
       stock: { pao: 6, alface: 4, tomate: 2, tomate_f: 3, cenoura: 2, cenoura_r: 3,
                queijo: 4, molho: 4, laranja: 4, morango: 2, acucar: 6 },
+      velho: {},  // ingredientes que passaram do ponto (tiram pontos)
       seeds: { alface: 2, tomate: 1, cenoura: 2, morango: 1 },
       plots: [
         { crop: 'alface', stage: 'growing', grow: 20, water: 80, dry: 0 },
@@ -32,13 +33,19 @@ const G = {
       ],
       jade: { fome: 70, alegria: 70 },
       up: {}, acessorios: [], acessorio: null,
+      faca: 100, aduboDias: 0, irrigQuebrada: false,
+      eventBag: [], lastEvent: null,
     };
   },
 
   // ---------- Melhorias ----------
   lvl(id) { return (this.s && this.s.up[id]) || 0; },
   maxSpots() { return MAX_SPOTS + this.lvl('balcao'); },
-  chopsNeeded() { return 5 - this.lvl('faca'); },
+  // faca cega precisa de mais toques
+  chopsNeeded() {
+    const f = this.s ? this.s.faca : 100;
+    return 5 - this.lvl('faca') + (f <= 0 ? 3 : f < 35 ? 1 : 0);
+  },
   blendZone() { return this.lvl('liquid') ? [0.55, 0.87] : [0.62, 0.82]; },
 
   buyUpgrade(id) {
@@ -50,6 +57,7 @@ const G = {
     this.s.coins -= p;
     this.s.up[id] = n + 1;
     if (id === 'canteiro') this.s.plots.push({ crop: null });
+    if (id === 'irrigacao') this.s.irrigQuebrada = false;
     UI.toast(`${u.nome}: ${u.desc[n]}`);
     SFX.coin();
     this.save();
@@ -81,22 +89,27 @@ const G = {
 
   startGame(continuar) {
     this.s = (continuar && this.load()) || this.newState();
-    // saves antigos (antes da loja) não têm estes campos
-    this.s.up = this.s.up || {};
-    this.s.acessorios = this.s.acessorios || [];
-    if (this.s.acessorio === undefined) this.s.acessorio = null;
+    // saves de versões antigas não têm estes campos
+    const def = this.newState();
+    for (const k of ['up', 'acessorios', 'acessorio', 'velho', 'faca', 'aduboDias', 'irrigQuebrada', 'eventBag', 'lastEvent']) {
+      if (this.s[k] === undefined) this.s[k] = def[k];
+    }
+    if (this.s.up.adubo) { delete this.s.up.adubo; this.s.aduboDias = 3; } // adubo virou item do mercado
     this.startDay();
   },
 
   startDay() {
     const d = DIFF(this.s.day);
     this.run = {
-      phase: 'prep', prepLeft: d.prep, diff: d, time: 0,
+      phase: 'prep', prepLeft: d.prep, diff: d, time: 0, openAt: 0,
       customers: [], nextNum: 1, spawned: 0, spawnTimer: 2,
       served: 0, lost: 0, earned: 0, scores: [],
       selected: null, board: null, bought: {},
       jadeTimer: 4, jadeHelping: null, petCooldown: 0,
       blend: null, leaving: [],
+      // eventos surpresa
+      evQueue: [], ev: { rush: 0, chuva: 0, luz: 0 }, jadeFuga: 0,
+      nextVip: false, nextAlergico: false, pratos: null, lavar: 0, log: [],
     };
     this.save();
     UI.dirty = true;
@@ -105,10 +118,24 @@ const G = {
   openDoors() {
     if (this.run.phase !== 'prep') return;
     this.run.phase = 'service';
+    this.run.openAt = this.run.time;
     this.run.spawnTimer = 1;
+    EV.schedule();
     SFX.bell();
     UI.toast('Portas abertas! Os clientes estão chegando.');
     UI.dirty = true;
+  },
+
+  // ---------- Estoque (fresco primeiro, depois o passado) ----------
+  have(id) { return (this.s.stock[id] || 0) + (this.s.velho[id] || 0); },
+  take(id) {
+    if ((this.s.stock[id] || 0) > 0) { this.s.stock[id]--; return 'fresco'; }
+    if ((this.s.velho[id] || 0) > 0) { this.s.velho[id]--; return 'velho'; }
+    return null;
+  },
+  give(id, n, velho) {
+    const bag = velho ? this.s.velho : this.s.stock;
+    bag[id] = (bag[id] || 0) + n;
   },
 
   // ---------- Pedidos ----------
@@ -141,15 +168,18 @@ const G = {
 
   spawnCustomer() {
     const r = this.run;
-    const pat = r.diff.paciencia * (0.85 + Math.random() * 0.3);
-    r.customers.push({
+    let pat = r.diff.paciencia * (0.85 + Math.random() * 0.3);
+    const c = {
       id: r.nextNum++, name: pick(NOMES), look: randomLook(),
       state: 'chegou', order: this.newOrder(),
       patience: pat, maxPatience: pat, alerted: false,
-      plate: { items: [], blend: null },
+      plate: { items: [], blend: null, bad: 0 },
       // tempos (segundos de jogo) usados na nota
       arrivedAt: r.time, takenAt: null, prepStartAt: null,
-    });
+    };
+    if (r.nextVip) { r.nextVip = false; c.vip = true; c.name = 'Crítico ' + c.name; c.patience = c.maxPatience = pat * 0.7; }
+    if (r.nextAlergico) { r.nextAlergico = false; c.order.sem = EV.semIngrediente(c.order); }
+    r.customers.push(c);
     r.spawned++;
     SFX.bell();
     UI.dirty = true;
@@ -176,8 +206,9 @@ const G = {
     if (c.plate.blend !== null) { UI.toast('O suco já foi batido!'); return false; }
     if (c.plate.items.length >= 9) { UI.toast('Não cabe mais nada!'); return false; }
     if (!ING[ingId].infinito) {
-      if ((this.s.stock[ingId] || 0) <= 0) { UI.toast(`Acabou ${ING[ingId].nome.toLowerCase()}!`); SFX.bad(); return false; }
-      this.s.stock[ingId]--;
+      const kind = this.take(ingId);
+      if (!kind) { UI.toast(`Acabou ${ING[ingId].nome.toLowerCase()}!`); SFX.bad(); return false; }
+      if (kind === 'velho') { c.plate.bad++; UI.toast(`${ING[ingId].nome} passado… vai tirar pontos!`); }
     }
     if (c.prepStartAt === null) c.prepStartAt = this.run.time; // começou a preparar
     c.plate.items.push(ingId);
@@ -189,7 +220,7 @@ const G = {
   trashPlate() {
     const c = this.selectedCust();
     if (!c || !c.plate.items.length) return;
-    c.plate = { items: [], blend: null };
+    c.plate = { items: [], blend: null, bad: 0 };
     SFX.bad();
     UI.dirty = true;
   },
@@ -197,6 +228,7 @@ const G = {
   blendStart() {
     const c = this.selectedCust();
     if (!c || c.order.recipe !== 'suco' || c.plate.blend !== null || !c.plate.items.length) return;
+    if (this.run.ev.luz > 0) { UI.toast('Sem energia! O liquidificador não liga.'); SFX.bad(); return; }
     this.run.blend = { p: 0, tick: 0 };
   },
   blendEnd() {
@@ -213,23 +245,30 @@ const G = {
   },
 
   serve() {
-    const c = this.selectedCust();
+    const r = this.run, c = this.selectedCust();
     if (!c || !c.plate.items.length) return;
     if (c.order.recipe === 'suco' && c.plate.blend === null) { UI.toast('Bata o suco antes de servir!'); return; }
-    const card = scoreDish(c, this.run.time);
+    if (r.pratos !== null && r.pratos <= 0) { UI.toast('Sem louça limpa! Lave antes de servir.'); SFX.bad(); return; }
+    if (r.pratos !== null) r.pratos--;
+    const card = scoreDish(c, r.time);
     const score = card.total;
     const rec = RECIPES[c.order.recipe];
     const ratio = c.patience / c.maxPatience;
     UI.scoreCard(c.name, card);
     const tip = score >= 70 ? Math.round(rec.preco * 0.6 * ratio) : 0;
-    const gain = Math.round(rec.preco * score / 100) + tip;
+    let gain = Math.round(rec.preco * score / 100) + tip;
+    if (c.vip) {
+      if (score >= 90) { gain *= 3; UI.alert('⭐', 'O crítico adorou!', `Pagou o triplo: +${gain}`); r.log.push(`⭐ Crítico adorou (nota ${score})`); }
+      else { r.lost++; UI.alert('📝', 'O crítico não gostou…', 'Nota abaixo de 90: você perdeu 1 ❤️'); r.log.push(`📝 Crítico reprovou (nota ${score})`); SFX.bad(); }
+    }
+    if (c.order.sem && card.alergia) r.log.push(`🚫 ${c.name} recebeu ${ING[c.order.sem].nome.toLowerCase()}!`);
     this.s.coins += gain;
-    this.run.earned += gain;
-    this.run.served++;
-    this.run.scores.push(score);
+    r.earned += gain;
+    r.served++;
+    r.scores.push(score);
     this.leave(c, score >= 70 ? 'feliz' : score >= 40 ? 'ok' : 'bravo',
       `${score >= 90 ? '😍' : score >= 70 ? '🙂' : score >= 40 ? '😐' : '😠'} +${gain}`);
-    if (tip) UI.toast(`Gorjeta de ${c.name}: +${tip}`);
+    if (tip && !c.vip) UI.toast(`Gorjeta de ${c.name}: +${tip}`);
     SFX.coin();
   },
 
@@ -244,12 +283,22 @@ const G = {
     UI.dirty = true;
   },
 
+  // Louça suja (evento): lavar com toques
+  wash() {
+    const r = this.run;
+    if (r.pratos === null) return;
+    r.lavar++;
+    SFX.water();
+    if (r.lavar >= LAVAR_TOQUES) { r.lavar = 0; r.pratos += 3; UI.toast('+3 pratos limpos'); SFX.add(); }
+    UI.dirty = true;
+  },
+
   // ---------- Preparo ----------
   putOnBoard(id) {
     if (this.run.board) { UI.toast('A tábua está ocupada.'); return; }
-    if ((this.s.stock[id] || 0) <= 0) { UI.toast(`Sem ${ING[id].nome.toLowerCase()}. Colha na horta!`); SFX.bad(); return; }
-    this.s.stock[id]--;
-    this.run.board = { id, chops: 0 };
+    const kind = this.take(id);
+    if (!kind) { UI.toast(`Sem ${ING[id].nome.toLowerCase()}. Colha na horta!`); SFX.bad(); return; }
+    this.run.board = { id, chops: 0, velho: kind === 'velho' };
     SFX.tap();
     UI.dirty = true;
   },
@@ -260,11 +309,23 @@ const G = {
     SFX.chop();
     if (b.chops >= this.chopsNeeded()) {
       const ing = ING[b.id];
-      this.s.stock[ing.cutTo] = (this.s.stock[ing.cutTo] || 0) + ing.cutYield;
-      UI.toast(`+${ing.cutYield} ${ING[ing.cutTo].nome.toLowerCase()}`);
+      this.give(ing.cutTo, ing.cutYield, b.velho);
+      UI.toast(`+${ing.cutYield} ${ING[ing.cutTo].nome.toLowerCase()}${b.velho ? ' (passado)' : ''}`);
       this.run.board = null;
+      // a faca perde o fio a cada corte
+      const antes = this.s.faca;
+      this.s.faca = Math.max(0, this.s.faca - FIO_POR_CORTE);
+      if (antes >= 35 && this.s.faca < 35) UI.toast('A faca está perdendo o fio…');
+      if (antes > 0 && this.s.faca <= 0) { UI.alert('🔪', 'A faca ficou cega!', 'Afie no Preparo ou cortar vai demorar'); this.run.log.push('🔪 A faca ficou cega'); }
       SFX.add();
     }
+    UI.dirty = true;
+  },
+  sharpen() {
+    if (this.s.faca >= 100) { UI.toast('A faca já está afiada.'); return; }
+    this.s.faca = this.lvl('amolador') ? 100 : Math.min(100, this.s.faca + 15);
+    SFX.chop();
+    if (this.s.faca >= 100) { UI.toast('Faca afiada!'); SFX.add(); }
     UI.dirty = true;
   },
 
@@ -287,15 +348,39 @@ const G = {
   },
   harvest(i) {
     const p = this.s.plots[i];
-    if (p.stage !== 'pronto') return;
+    if ((p.stage !== 'pronto' && p.stage !== 'passado') || p.praga) return;
+    const ruim = p.stage === 'passado';
     const got = CROPS[p.crop].colheita;
-    for (const [id, n] of Object.entries(got)) this.s.stock[id] = (this.s.stock[id] || 0) + n;
-    UI.toast(`Colheu ${Object.entries(got).map(([id, n]) => `${n} ${ING[id].nome.toLowerCase()}`).join(', ')}`);
+    const txt = [];
+    for (const [id, n0] of Object.entries(got)) {
+      const n = ruim ? Math.ceil(n0 / 2) : n0;
+      this.give(id, n, ruim);
+      txt.push(`${n} ${ING[id].nome.toLowerCase()}`);
+    }
+    UI.toast(ruim ? `Colheu ${txt.join(', ')} passados (tiram pontos)` : `Colheu ${txt.join(', ')}`);
     this.s.plots[i] = { crop: null };
     SFX.harvest();
     UI.dirty = true;
   },
   clearPlot(i) { this.s.plots[i] = { crop: null }; SFX.tap(); UI.dirty = true; },
+  removePest(i) {
+    const p = this.s.plots[i];
+    if (!p.praga) return;
+    p.praga = false; p.pragaT = 0;
+    UI.toast('Lagarta removida!');
+    SFX.harvest();
+    UI.dirty = true;
+  },
+  fixIrrigation() {
+    if (!this.s.irrigQuebrada) return;
+    if (this.s.coins < CONSERTO_IRRIGACAO) { UI.toast('Moedas insuficientes para o conserto!'); SFX.bad(); return; }
+    this.s.coins -= CONSERTO_IRRIGACAO;
+    this.s.irrigQuebrada = false;
+    UI.toast('Irrigação consertada!');
+    this.run.log.push(`🔧 Conserto da irrigação (−${CONSERTO_IRRIGACAO})`);
+    SFX.coin();
+    UI.dirty = true;
+  },
 
   // ---------- Mercado ----------
   price(idx) {
@@ -308,8 +393,11 @@ const G = {
     if (this.s.coins < p) { UI.toast('Moedas insuficientes!'); SFX.bad(); return; }
     this.s.coins -= p;
     this.run.bought[idx] = (this.run.bought[idx] || 0) + 1;
-    const bag = item.tipo === 'semente' ? this.s.seeds : this.s.stock;
-    bag[item.id] = (bag[item.id] || 0) + item.qtd;
+    if (item.tipo === 'adubo') { this.s.aduboDias += item.qtd; UI.toast(`Adubo por mais ${item.qtd} dias`); }
+    else {
+      const bag = item.tipo === 'semente' ? this.s.seeds : this.s.stock;
+      bag[item.id] = (bag[item.id] || 0) + item.qtd;
+    }
     SFX.coin();
     UI.dirty = true;
   },
@@ -320,7 +408,10 @@ const G = {
     const f = JADE_FOOD[id];
     if (!f) return;
     if (f.recusa) { UI.jadeSay(f.fala); SFX.bad(); return; }
-    if ((this.s.stock[id] || 0) <= 0) { UI.toast(`Sem ${ING[id].nome.toLowerCase()} no estoque.`); return; }
+    if ((this.s.stock[id] || 0) <= 0) {
+      UI.jadeSay((this.s.velho[id] || 0) > 0 ? 'Jade não come legume passado!' : `Sem ${ING[id].nome.toLowerCase()} fresco.`);
+      return;
+    }
     if (this.s.jade.fome >= 98 && f.fome > 10) { UI.jadeSay('Jade está cheinha!'); return; }
     this.s.stock[id]--;
     const j = this.s.jade;
@@ -351,18 +442,37 @@ const G = {
       if (r.prepLeft <= 0) this.openDoors();
     }
 
-    // Horta (só cresce regada)
-    const drain = WATER_DRAIN * (this.lvl('irrigacao') ? 0.6 : 1);
-    const growRate = this.lvl('adubo') ? 1.3 : 1;
+    // Horta: só cresce regada; irrigação quebrada vaza água; pronto demais passa do ponto
+    const irr = this.lvl('irrigacao');
+    const drain = WATER_DRAIN * (this.s.irrigQuebrada ? 1.6 : irr ? 0.6 : 1);
+    const growRate = this.s.aduboDias > 0 ? 1.3 : 1;
+    const raining = r.ev.chuva > 0;
     for (const p of this.s.plots) {
+      if (!p.crop) continue;
+      if (p.praga) {
+        p.pragaT = (p.pragaT || 0) + dt;
+        if (p.pragaT > PRAGA_LIMIT) {
+          p.praga = false; p.stage = 'murcho';
+          UI.toast(`A lagarta comeu ${CROPS[p.crop].nome.toLowerCase()}!`);
+          r.log.push(`🐛 Lagarta destruiu ${CROPS[p.crop].nome.toLowerCase()}`);
+          SFX.bad(); UI.dirty = true;
+        }
+        continue; // planta atacada não cresce
+      }
+      if (p.stage === 'pronto') {
+        p.ripe = (p.ripe || 0) + dt;
+        if (p.ripe > RIPE_LIMIT) { p.stage = 'passado'; UI.toast(`${CROPS[p.crop].nome} passou do ponto!`); UI.dirty = true; }
+        continue;
+      }
       if (p.stage !== 'growing') continue;
+      if (raining) p.water = 100;
       p.water -= drain * dt;
       if (p.water <= 0) {
         p.water = 0; p.dry += dt;
         if (p.dry > DRY_LIMIT) { p.stage = 'murcho'; UI.toast(`${CROPS[p.crop].nome} murchou!`); SFX.bad(); UI.dirty = true; }
       } else {
         p.dry = 0; p.grow += dt * growRate;
-        if (p.grow >= CROPS[p.crop].tempo) { p.stage = 'pronto'; UI.dirty = true; }
+        if (p.grow >= CROPS[p.crop].tempo) { p.stage = 'pronto'; p.ripe = 0; UI.dirty = true; }
       }
     }
 
@@ -381,7 +491,7 @@ const G = {
       r.jadeTimer -= dt;
       if (r.jadeTimer <= 0) {
         r.jadeTimer = 8;
-        const dry = this.s.plots.filter(p => p.stage === 'growing' && p.water < 45).sort((a, b) => a.water - b.water)[0];
+        const dry = this.s.plots.filter(p => p.stage === 'growing' && !p.praga && p.water < 45).sort((a, b) => a.water - b.water)[0];
         if (dry) { dry.water = 100; dry.dry = 0; UI.toast(`Jade regou ${CROPS[dry.crop].nome.toLowerCase()}`); }
       }
     }
@@ -404,16 +514,19 @@ const G = {
 
     if (r.phase !== 'service') return;
 
-    // Chegada de clientes
-    r.spawnTimer -= dt;
+    EV.update(dt);
+
+    // Chegada de clientes (mais rápido na hora do rush)
+    r.spawnTimer -= dt * (r.ev.rush > 0 ? 2.5 : 1);
     if (r.spawnTimer <= 0 && r.spawned < r.diff.total && r.customers.length < this.maxSpots()) {
       this.spawnCustomer();
       r.spawnTimer = r.diff.intervalo * (0.8 + Math.random() * 0.4);
     }
 
-    // Paciência
+    // Paciência (chuva deixa todo mundo mais impaciente)
+    const patRate = raining ? 1.25 : 1;
     for (const c of [...r.customers]) {
-      c.patience -= dt * (c.state === 'chegou' ? 0.8 : 1);
+      c.patience -= dt * patRate * (c.state === 'chegou' ? 0.8 : 1);
       const ratio = c.patience / c.maxPatience;
       if (ratio < 0.33 && !c.alerted) {
         c.alerted = true;
@@ -438,11 +551,25 @@ const G = {
     r.failed = failed;
     r.board = null;
     r.blend = null;
+    r.ev = { rush: 0, chuva: 0, luz: 0 };
+    r.jadeFuga = 0;
+    UI.clearEventFx();
     for (const c of r.customers) r.lost++;
     r.customers = [];
     const avg = r.scores.length ? r.scores.reduce((a, b) => a + b, 0) / r.scores.length : 0;
     r.avg = Math.round(avg);
     r.stars = failed ? 0 : avg >= 90 ? 3 : avg >= 75 ? 2 : avg >= 50 ? 1 : 0;
+    // Desgaste do dia
+    if (this.s.aduboDias > 0) {
+      this.s.aduboDias--;
+      if (!this.s.aduboDias) r.log.push('🌿 O adubo acabou (compre no Mercado)');
+    }
+    if (this.s.irrigQuebrada) {
+      this.s.irrigQuebrada = false;
+      this.s.up.irrigacao = 0;
+      r.log.push('💧 A irrigação quebrou de vez! Compre outra na loja');
+    }
+    if (this.s.faca < 35) r.log.push(`🔪 Faca com ${this.s.faca}% de fio`);
     // Jade feliz encontra uma semente de presente
     r.gift = null;
     if (this.jadeHelping()) {
@@ -493,12 +620,17 @@ function scoreDish(c, now) {
   const parts = {
     atendimento: timeScore(c.takenAt - c.arrivedAt, 3, 15),
     preparo: timeScore(now - (c.prepStartAt ?? now), esperado, esperado * 2.5),
-    precisao: precisionScore(c.order, c.plate),
+    // cada ingrediente passado tira 15% da precisão
+    precisao: precisionScore(c.order, c.plate) * Math.max(0, 1 - 0.15 * (c.plate.bad || 0)),
     entrega: clamp((c.patience / c.maxPatience) / 0.6, 0, 1),
   };
+  // Cliente alérgico recebeu o ingrediente proibido: nota zero
+  const alergia = !!(c.order.sem && c.plate.items.includes(c.order.sem));
+  if (alergia) parts.precisao = 0;
   let total = 0;
   for (const k in NOTA_PESOS) total += parts[k] * NOTA_PESOS[k];
   // Prato errado não pode tirar nota alta só por ser rápido
   if (parts.precisao < 0.5) total = Math.min(total, 49);
-  return { total: Math.round(total), parts };
+  if (alergia) total = 0;
+  return { total: Math.round(total), parts, alergia };
 }

@@ -84,6 +84,7 @@ const UI = {
           <div><b>${r.avg}</b><span>nota média</span></div>
           <div><b>🪙 ${r.earned}</b><span>ganhos</span></div>
         </div>
+        ${r.log.length ? `<div class="night-log">${r.log.slice(-6).map(l => `<span>${l}</span>`).join('')}</div>` : ''}
         ${r.gift ? `<p class="gift">${ic(r.gift)} A Jade achou uma semente de ${CROPS[r.gift].nome.toLowerCase()}!</p>`
                  : `<p class="gift">A Jade estava com fome e não achou nada hoje.</p>`}
         <p class="hint">${r.failed ? 'Você perdeu 3 clientes. Tente o mesmo dia de novo.' : `Amanhã é o dia ${s.day}: mais clientes e menos paciência.`}</p>
@@ -158,7 +159,12 @@ const UI = {
       let v = 0;
       if (k === 'pat') { const c = G.cust(+a); if (!c) continue; v = c.patience / c.maxPatience;
         el.parentNode.classList.toggle('low', v < 0.33);
-        const t = el.closest('.ticket'); if (t) t.classList.toggle('urgent', v < 0.33 && G.jadeHelping()); }
+        const t = el.closest('.ticket');
+        if (t) { t.classList.toggle('urgent', v < 0.33 && G.jadeHelping());
+                 t.classList.toggle('changed', !!c.changedAt && r.time - c.changedAt < 4); } }
+      else if (k === 'ripe') { const p = s.plots[+a]; v = 1 - (p.ripe || 0) / RIPE_LIMIT; }
+      else if (k === 'praga') { const p = s.plots[+a]; v = 1 - (p.pragaT || 0) / PRAGA_LIMIT; }
+      else if (k === 'fio') v = s.faca / 100;
       else if (k === 'water') v = (s.plots[+a].water || 0) / 100;
       else if (k === 'grow') { const p = s.plots[+a]; v = p.crop ? p.grow / CROPS[p.crop].tempo : 0; }
       else if (k === 'fome') v = s.jade.fome / 100;
@@ -168,6 +174,13 @@ const UI = {
     }
     const pl = document.getElementById('prepLeft');
     if (pl) pl.textContent = Math.ceil(Math.max(0, r.prepLeft));
+    // contadores dos eventos e efeitos de tela
+    for (const el of this.el.hud.querySelectorAll('[data-ev]')) {
+      const v = r.ev[el.dataset.ev];
+      el.textContent = Math.ceil(v);
+    }
+    this.el.stage.classList.toggle('raining', r.ev.chuva > 0);
+    this.el.stage.classList.toggle('blackout', r.ev.luz > 0);
     if (this.jadeExprT > 0) { this.jadeExprT -= 0.1; if (this.jadeExprT <= 0) { this.jadeExpr = null; this.dirty = true; } }
   },
 
@@ -178,7 +191,11 @@ const UI = {
       <div class="hud-l"><b>Dia ${s.day}</b>
         <span class="pill">🪙 ${s.coins}</span>
         <span class="pill">👥 ${r.served + r.lost}/${r.diff.total}</span>
-        <span class="pill hearts">${hearts}</span></div>
+        <span class="pill hearts">${hearts}</span>
+        ${r.ev.rush > 0 ? `<span class="pill evt">🏃 Rush <b data-ev="rush">${Math.ceil(r.ev.rush)}</b>s</span>` : ''}
+        ${r.ev.chuva > 0 ? `<span class="pill evt">🌧️ <b data-ev="chuva">${Math.ceil(r.ev.chuva)}</b>s</span>` : ''}
+        ${r.ev.luz > 0 ? `<span class="pill evt">⚡ Sem luz <b data-ev="luz">${Math.ceil(r.ev.luz)}</b>s</span>` : ''}
+        ${s.irrigQuebrada ? '<span class="pill evt">💧 Vazando</span>' : ''}</div>
       <div class="hud-r">
         ${r.phase === 'prep' ? `<span class="prep">Abre em <b id="prepLeft">${Math.ceil(r.prepLeft)}</b>s</span>
           <button class="btn sm go" data-act="open">Abrir portas</button>` : '<span class="prep open">Café aberto</span>'}
@@ -190,12 +207,14 @@ const UI = {
     const r = G.run, s = G.s;
     const badge = {
       balcao: r.customers.filter(c => c.state === 'chegou').length,
-      horta: s.plots.filter(p => p.stage === 'pronto' || p.stage === 'murcho' || (p.stage === 'growing' && p.water < 25)).length,
+      horta: s.plots.filter(p => p.praga || p.stage === 'pronto' || p.stage === 'passado' || p.stage === 'murcho' || (p.stage === 'growing' && p.water < 25)).length + (s.irrigQuebrada ? 1 : 0),
+      preparo: s.faca <= 0 ? 1 : 0,
+      montagem: r.pratos !== null && r.pratos <= 0 ? 1 : 0,
       jade: G.jadeHelping() ? 0 : 1,
     };
     this.el.tabs.innerHTML = TABS.map(t => `
       <button class="tab ${this.station === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">
-        <span class="em">${t.em}</span>${t.nome}${badge[t.id] ? `<i class="badge">${t.id === 'jade' ? '!' : badge[t.id]}</i>` : ''}
+        <span class="em">${t.em}</span>${t.nome}${badge[t.id] ? `<i class="badge">${t.id === 'horta' || t.id === 'balcao' ? badge[t.id] : '!'}</i>` : ''}
       </button>`).join('');
   },
 
@@ -204,10 +223,11 @@ const UI = {
     const list = r.customers.filter(c => c.state === 'esperando');
     this.el.rail.innerHTML = `<div class="rail-h">Comandas</div>` + (list.length ? list.map(c => {
       const rec = RECIPES[c.order.recipe];
-      return `<button class="ticket ${r.selected === c.id ? 'sel' : ''}" data-act="select" data-arg="${c.id}">
-        <span class="t-num">${String(c.id).padStart(2, '0')}</span>
+      return `<button class="ticket ${r.selected === c.id ? 'sel' : ''} ${c.vip ? 'vip' : ''}" data-act="select" data-arg="${c.id}">
+        <span class="t-num">${c.vip ? '⭐' : String(c.id).padStart(2, '0')}</span>
         ${ic(rec.icon, 't-ic')}
-        <span class="t-txt"><b>${c.name}</b><small>${rec.nome}</small></span>
+        <span class="t-txt"><b>${c.name}</b><small>${rec.nome}</small>
+          ${c.order.sem ? `<em class="t-sem">🚫 sem ${ING[c.order.sem].nome.toLowerCase()}</em>` : ''}</span>
         <span class="t-paw">${ic('pata')}</span>
         <span class="bar"><i data-bar="pat:${c.id}"></i></span>
       </button>`;
@@ -216,6 +236,10 @@ const UI = {
 
   // Lista do pedido (usada na montagem)
   orderHTML(order) {
+    const sem = order.sem ? `<div class="o-sem">🚫 SEM ${ING[order.sem].nome.toUpperCase()} (alergia!)</div>` : '';
+    return sem + this.orderRows(order);
+  },
+  orderRows(order) {
     if (order.recipe === 'sanduiche') {
       return `<div class="o-stack">${[...order.layers].reverse().map((id, i, a) =>
         `<div class="o-row"><span class="o-n">${a.length - i}</span>${ic(id)}<span>${ING[id].nome}</span></div>`).join('')}</div>
@@ -240,7 +264,8 @@ const UI = {
         if (c.leaving) return `<div class="spot leaving">${customerSVG(c.leaving.look, c.leaving.mood)}<div class="float">${c.leaving.label}</div></div>`;
         const ratio = c.patience / c.maxPatience;
         const mood = ratio < 0.33 ? 'bravo' : 'ok';
-        return `<div class="spot">
+        return `<div class="spot ${c.vip ? 'vip' : ''}">
+          ${c.vip ? '<div class="vip-tag">⭐ Crítico</div>' : ''}
           ${c.state === 'chegou'
             ? `<button class="bubble ask" data-act="take" data-arg="${c.id}">Anotar pedido</button>`
             : `<div class="bubble wait">#${String(c.id).padStart(2, '0')} ${ic(RECIPES[c.order.recipe].icon)}</div>`}
@@ -256,10 +281,14 @@ const UI = {
   st_preparo() {
     const s = G.s, b = G.run.board;
     const raw = ['tomate', 'cenoura'];
+    const cega = s.faca <= 0;
     return `
       <div class="prep-col"><h3>Para cortar</h3>
-        ${raw.map(id => `<button class="bin" data-act="board" data-arg="${id}" ${s.stock[id] ? '' : 'disabled'}>
-          ${ic(id)}<span>${ING[id].nome}</span><b>${s.stock[id] || 0}</b></button>`).join('')}</div>
+        ${raw.map(id => `<button class="bin" data-act="board" data-arg="${id}" ${G.have(id) ? '' : 'disabled'}>
+          ${ic(id)}<span>${ING[id].nome}</span><b>${G.have(id)}</b>${this.oldTag(id)}</button>`).join('')}
+        <div class="fio ${cega ? 'cega' : s.faca < 35 ? 'gasta' : ''}"><span>🔪 Fio ${cega ? '· CEGA!' : ''}</span>
+          <div class="pbar"><i data-bar="fio"></i></div></div>
+        <button class="btn sm" data-act="sharpen" ${s.faca >= 100 ? 'disabled' : ''}>${G.lvl('amolador') ? '⚙️ Amolar já' : '🪨 Afiar (toques)'}</button></div>
       <button class="board ${b ? 'full' : ''}" data-act="chop">
         ${b ? `<div class="on-board c${b.chops}">${ic(b.chops >= G.chopsNeeded() / 2 ? ING[b.id].cutTo : b.id)}</div>
                <div class="chops">${'●'.repeat(b.chops)}${'○'.repeat(G.chopsNeeded() - b.chops)}</div>
@@ -267,7 +296,7 @@ const UI = {
              : '<p>Toque num legume para colocar na tábua</p>'}
       </button>
       <div class="prep-col"><h3>Pronto</h3>
-        ${raw.map(id => { const c = ING[id].cutTo; return `<div class="bin static">${ic(c)}<span>${ING[c].nome}</span><b>${s.stock[c] || 0}</b></div>`; }).join('')}
+        ${raw.map(id => { const c = ING[id].cutTo; return `<div class="bin static">${ic(c)}<span>${ING[c].nome}</span><b>${G.have(c)}</b>${this.oldTag(c)}</div>`; }).join('')}
       </div>`;
   },
 
@@ -276,9 +305,13 @@ const UI = {
     if (!c) return `<div class="empty-st">${ic('pao', 'big')}<p>Toque numa comanda à direita para montar o pedido.</p></div>`;
     const rec = RECIPES[c.order.recipe], s = G.s, pl = c.plate;
     const bins = rec.bins.map(id => {
-      const n = ING[id].infinito ? '∞' : (s.stock[id] || 0);
-      return `<div class="bin drag ${n === 0 ? 'off' : ''}" data-drag="${id}">${ic(id)}<b>${n}</b><span>${ING[id].nome}</span></div>`;
+      const n = ING[id].infinito ? '∞' : G.have(id);
+      const proibido = c.order.sem === id;
+      return `<div class="bin drag ${n === 0 ? 'off' : ''} ${proibido ? 'proibido' : ''}" data-drag="${id}">${ic(id)}<b>${n}</b><span>${ING[id].nome}</span>${this.oldTag(id)}</div>`;
     }).join('');
+    const r = G.run;
+    const pratos = r.pratos === null ? '' : `<div class="pratos ${r.pratos <= 0 ? 'zero' : ''}">🍽️ ${r.pratos} limpos
+      <button class="btn sm" data-act="wash">🧽 Lavar ${r.lavar}/${LAVAR_TOQUES}</button></div>`;
     let dish = '';
     if (c.order.recipe === 'sanduiche') {
       dish = `<div class="plate"><div class="stack">${pl.items.map(id => `<i class="ly ly-${id}"></i>`).join('')}</div></div>`;
@@ -297,13 +330,19 @@ const UI = {
       <div class="order-card"><div class="oc-h">#${String(c.id).padStart(2, '0')} · ${c.name}</div>
         <div class="oc-r">${rec.nome}</div>${this.orderHTML(c.order)}</div>
       <div class="bins">${bins}</div>
-      <div class="drop" id="drop">${dish}<p class="drop-hint">${pl.items.length ? '' : 'Arraste ou toque nos ingredientes'}</p></div>
+      <div class="drop" id="drop">${pratos}${dish}<p class="drop-hint">${pl.items.length ? '' : 'Arraste ou toque nos ingredientes'}</p></div>
       <div class="actions">
         ${juice ? `<div class="meter"><i class="zone" style="left:${G.blendZone()[0] * 100}%;width:${(G.blendZone()[1] - G.blendZone()[0]) * 100}%"></i><i class="fill" data-bar="blend"></i></div>
-          <button class="btn blend-btn" data-hold="blend" ${pl.blend !== null || !pl.items.length ? 'disabled' : ''}>Segurar p/ bater</button>` : ''}
+          <button class="btn blend-btn" data-hold="blend" ${pl.blend !== null || !pl.items.length || r.ev.luz > 0 ? 'disabled' : ''}>${r.ev.luz > 0 ? '⚡ Sem energia' : 'Segurar p/ bater'}</button>` : ''}
         <button class="btn ghost" data-act="trash" ${pl.items.length ? '' : 'disabled'}>🗑️ Lixo</button>
         <button class="btn go" data-act="serve" ${pl.items.length ? '' : 'disabled'}>Servir ✓</button>
       </div>`;
+  },
+
+  // Etiqueta marrom quando há unidades passadas do ponto
+  oldTag(id) {
+    const v = G.s.velho[id] || 0;
+    return v ? `<i class="old-tag">${v} passado${v > 1 ? 's' : ''}</i>` : '';
   },
 
   juiceColor(items) {
@@ -324,8 +363,15 @@ const UI = {
         }
         return `<button class="plot empty" data-act="pick" data-arg="${i}"><div class="soil"></div><span>＋ Plantar</span></button>`;
       }
+      if (p.praga) return `<div class="plot bug"><div class="soil"></div>
+        <div class="crop">${ic(p.stage === 'growing' ? 'broto' : p.crop, 'mid')}<span class="lagarta">🐛</span></div>
+        <div class="pbar praga"><i data-bar="praga:${i}"></i></div>
+        <button class="btn sm bug-btn" data-act="pest" data-arg="${i}">🐛 Tirar lagarta</button></div>`;
       if (p.stage === 'pronto') return `<button class="plot ready" data-act="harvest" data-arg="${i}"><div class="soil"></div>
-        <div class="crop bounce">${ic(p.crop, 'big')}</div><span>Colher!</span></button>`;
+        <div class="crop bounce">${ic(p.crop, 'big')}</div>
+        <div class="pbar ripe"><i data-bar="ripe:${i}"></i></div><span>Colher!</span></button>`;
+      if (p.stage === 'passado') return `<button class="plot passado" data-act="harvest" data-arg="${i}"><div class="soil"></div>
+        <div class="crop">${ic(p.crop, 'big')}</div><span>Passou do ponto · colher</span></button>`;
       if (p.stage === 'murcho') return `<button class="plot dead" data-act="clear" data-arg="${i}"><div class="soil"></div>
         <div class="crop">${ic('murcho', 'big')}</div><span>Murchou · limpar</span></button>`;
       const prog = p.grow / CROPS[p.crop].tempo;
@@ -336,18 +382,22 @@ const UI = {
         <div class="pbar water"><i data-bar="water:${i}"></i></div>
         <button class="btn sm water-btn" data-act="water" data-arg="${i}">${ic('regador')} Regar</button></div>`;
     }).join('')}</div>
-    <p class="garden-tip">💧 Plantas só crescem regadas. Secas por muito tempo, murcham.${G.jadeHelping() ? ' A Jade rega as mais secas!' : ''}</p>`;
+    ${s.irrigQuebrada ? `<div class="leak">💧 Vazamento na irrigação! A água seca rápido. Se não consertar hoje, ela quebra de vez.
+      <button class="btn sm go" data-act="fix" ${s.coins < CONSERTO_IRRIGACAO ? 'disabled' : ''}>🔧 Consertar · 🪙 ${CONSERTO_IRRIGACAO}</button></div>` : ''}
+    <p class="garden-tip">💧 Só cresce regada. Pronta demais, passa do ponto.
+      ${s.aduboDias > 0 ? `🌿 Adubo: ${s.aduboDias} dia${s.aduboDias > 1 ? 's' : ''}.` : '🌿 Sem adubo.'}
+      ${G.jadeHelping() ? ' 🐹 A Jade rega as mais secas!' : ''}</p>`;
   },
 
   st_mercado() {
     const s = G.s;
     return `<div class="market">${MARKET.map((m, i) => {
       const p = G.price(i);
-      const seed = m.tipo === 'semente';
-      const have = seed ? (s.seeds[m.id] || 0) : (s.stock[m.id] || 0);
-      return `<button class="item ${seed ? 'seed-item' : ''}" data-act="buy" data-arg="${i}" ${s.coins < p ? 'disabled' : ''}>
-        <div class="it-ic">${ic(m.id)}${seed ? '<i class="pack">semente</i>' : ''}</div>
-        <span class="it-n">${seed ? 'Sementes de ' + CROPS[m.id].nome.toLowerCase() : ING[m.id].nome} ×${m.qtd}</span>
+      const seed = m.tipo === 'semente', adubo = m.tipo === 'adubo';
+      const have = adubo ? `${s.aduboDias} dias` : seed ? (s.seeds[m.id] || 0) : (s.stock[m.id] || 0);
+      return `<button class="item ${seed ? 'seed-item' : ''} ${adubo ? 'adubo-item' : ''}" data-act="buy" data-arg="${i}" ${s.coins < p ? 'disabled' : ''}>
+        <div class="it-ic">${ic(adubo ? 'broto' : m.id)}${seed ? '<i class="pack">semente</i>' : adubo ? '<i class="pack">adubo</i>' : ''}</div>
+        <span class="it-n">${adubo ? `Adubo · ${m.qtd} dias (+30%)` : seed ? 'Sementes de ' + CROPS[m.id].nome.toLowerCase() : ING[m.id].nome}${adubo ? '' : ' ×' + m.qtd}</span>
         <span class="it-have">tem ${have}</span>
         <b class="it-p">🪙 ${p}</b></button>`;
     }).join('')}</div>`;
@@ -451,6 +501,32 @@ const UI = {
     setTimeout(() => el.remove(), 3200);
   },
 
+  // Aviso grande de evento surpresa
+  alert(em, title, text) {
+    document.querySelectorAll('.ev-alert').forEach(x => x.remove());
+    const el = document.createElement('div');
+    el.className = 'ev-alert';
+    el.innerHTML = `<span class="ev-em">${em}</span><div><b>${title}</b><small>${text}</small></div>`;
+    this.el.fx.appendChild(el);
+    setTimeout(() => el.remove(), 3400);
+  },
+
+  // Jade correndo pela tela (toque para pegar)
+  showJadeRun() {
+    this.hideJadeRun();
+    const el = document.createElement('button');
+    el.className = 'jade-run';
+    el.dataset.act = 'catchjade';
+    el.innerHTML = `<span class="flip">${jadeSVG('feliz')}</span>`;
+    this.el.fx.appendChild(el);
+  },
+  hideJadeRun() { document.querySelectorAll('.jade-run').forEach(x => x.remove()); },
+  clearEventFx() {
+    this.hideJadeRun();
+    document.querySelectorAll('.ev-alert').forEach(x => x.remove());
+    this.el.stage.classList.remove('raining', 'blackout');
+  },
+
   // Confirmação dentro do jogo (pausa enquanto aberta)
   confirm(title, text, onYes) {
     this.modal = true;
@@ -498,7 +574,7 @@ const ACTIONS = {
   quit() {
     UI.confirm('Sair para o menu?',
       `O jogo fica salvo no começo do Dia ${G.s.day}. O que você fez hoje será perdido.`,
-      () => { UI.drag = null; G.run = null; UI.el.fx.innerHTML = ''; UI.showTitle(); });
+      () => { UI.drag = null; UI.clearEventFx(); G.run = null; UI.el.fx.innerHTML = ''; UI.showTitle(); });
   },
   tab(id) { UI.go(id); },
   take(id) { G.takeOrder(+id); },
@@ -515,6 +591,11 @@ const ACTIONS = {
   clear(i) { G.clearPlot(+i); },
   buy(i) { G.buy(+i); },
   pet() { G.petJade(); },
+  sharpen() { G.sharpen(); },
+  wash() { G.wash(); },
+  pest(i) { G.removePest(+i); },
+  fix() { G.fixIrrigation(); },
+  catchjade() { EV.catchJade(); },
 };
 
 // ===== Loop principal =====
