@@ -621,7 +621,7 @@ document.getElementById('stage').addEventListener('click', e => {
   if (!hit) return;
   let o = hit.object;
   while (o.parent && !targets.includes(o)) o = o.parent;
-  if (o === jade) { if (jadeHop <= 0) { jadeHop = 1; SFX.squeak(); } return; }
+  if (o === jade) { if (jadeHop <= 0) { jadeHop = 1; SFX.wheek(3); } return; }
   for (const [id, c] of custs) if (c.g === o) {
     const cu = G.cust(id);
     if (cu && cu.state === 'chegou') G.takeOrder(id);

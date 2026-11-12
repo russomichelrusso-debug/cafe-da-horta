@@ -72,6 +72,7 @@ const EVENTS = {
     start() {
       G.run.jadeFuga = 5;
       UI.showJadeRun();
+      SFX.wheek(4, true, 0.45);
       UI.alert('🐹', 'A Jade escapou!', 'Toque nela antes que derrube algo!');
       return null; // o resultado entra no resumo quando terminar
     },
@@ -92,7 +93,7 @@ const EVENTS = {
     start() {
       G.s.irrigQuebrada = true;
       UI.alert('💧', 'Vazamento na irrigação!', `A água seca rápido. Conserte na Horta (🪙 ${CONSERTO_IRRIGACAO}) antes da noite`);
-      if (G.jadeHelping()) UI.toast('Jade: uii! Tem água vazando na horta!');
+      if (G.jadeHelping()) { UI.toast('Jade: uii! Tem água vazando na horta!'); SFX.wheek(2, true, 0.5); }
       return '💧 Vazamento na irrigação';
     },
   },
@@ -191,7 +192,7 @@ const EV = {
     G.s.jade.alegria = clamp(G.s.jade.alegria + 8, 0, 100);
     UI.toast('Peguei você, Jade! (ela ainda está com fome…)');
     r.log.push('🐹 Jade escapou, mas foi pega a tempo');
-    SFX.squeak();
+    SFX.wheek(3);
     UI.dirty = true;
   },
 

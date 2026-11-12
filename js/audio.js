@@ -28,7 +28,100 @@ const SFX = {
   coin()   { this.tone(880, 0.08, 'square', 0.07); this.tone(1320, 0.12, 'square', 0.07, 0, 0.08); },
   bad()    { this.tone(220, 0.25, 'sawtooth', 0.08, -100); },
   bell()   { this.tone(1046, 0.3, 'sine', 0.12); this.tone(1318, 0.3, 'sine', 0.08, 0, 0.05); },
-  squeak() { this.tone(1400, 0.08, 'sine', 0.1, 600); this.tone(1700, 0.1, 'sine', 0.1, 500, 0.1); },
+  // ===== Sons da Jade (porquinho-da-índia), todos sintetizados =====
+  noiseBuf() {
+    if (!this._noise) {
+      const n = this.ctx.sampleRate;
+      this._noise = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = this._noise.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return this._noise;
+  },
+  // um "uíí": assobio que sobe rápido e cai, com vibrato e um sopro de ar
+  wheekNote(t, f0, f1, dur, vol) {
+    const c = this.ctx;
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(vol, t + 0.025);
+    out.gain.setValueAtTime(vol, t + dur * 0.6);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    out.connect(c.destination);
+    const lfo = c.createOscillator(), lfoG = c.createGain();   // vibrato ~30 Hz
+    lfo.frequency.value = 26 + Math.random() * 8;
+    lfoG.gain.value = f0 * 0.035;
+    lfo.connect(lfoG);
+    for (const [mult, type, g] of [[1, 'sine', 1], [2, 'triangle', 0.18]]) {  // fundamental + harmônico
+      const o = c.createOscillator(), og = c.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0 * mult, t);
+      o.frequency.linearRampToValueAtTime(f1 * mult, t + dur * 0.35);
+      o.frequency.linearRampToValueAtTime(f1 * 0.8 * mult, t + dur);
+      lfoG.connect(o.frequency);
+      og.gain.value = g;
+      o.connect(og).connect(out);
+      o.start(t); o.stop(t + dur + 0.02);
+    }
+    const nz = c.createBufferSource(), bp = c.createBiquadFilter(), ng = c.createGain();  // sopro
+    nz.buffer = this.noiseBuf();
+    bp.type = 'bandpass'; bp.frequency.value = f1; bp.Q.value = 5;
+    ng.gain.value = 0.25;
+    nz.connect(bp).connect(ng).connect(out);
+    nz.start(t, Math.random() * 0.5, dur);
+    lfo.start(t); lfo.stop(t + dur + 0.02);
+  },
+  // sequência de "uíí uíí uííí!" (animada); urgent = mais aguda e rápida
+  wheek(n = 3, urgent = false, delay = 0) {
+    if (this.muted || !this.ctx) return;
+    let t = this.ctx.currentTime + delay;
+    const base = (urgent ? 1650 : 1350) + Math.random() * 120;
+    for (let i = 0; i < n; i++) {
+      const last = i === n - 1;
+      const dur = urgent ? 0.13 : last ? 0.32 : 0.17;      // o último "uííí" é mais longo
+      const f0 = base + i * 90, f1 = f0 * (last ? 1.9 : 1.7);
+      this.wheekNote(t, f0, f1, dur, urgent ? 0.13 : 0.11);
+      t += dur + (urgent ? 0.04 : 0.07);
+    }
+  },
+  // ronronar de contentamento: "rrrrr" grave e pulsante
+  purr(dur = 1.0, delay = 0) {
+    if (this.muted || !this.ctx) return;
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(), lp = c.createBiquadFilter(), am = c.createGain(), out = c.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(115, t); o.frequency.linearRampToValueAtTime(95, t + dur);
+    lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2;
+    am.gain.value = 0.5;
+    const lfo = c.createOscillator(), lfoG = c.createGain();  // pulsos ~24 por segundo
+    lfo.type = 'square'; lfo.frequency.value = 24; lfoG.gain.value = 0.5;
+    lfo.connect(lfoG).connect(am.gain);
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.16, t + 0.08);
+    out.gain.setValueAtTime(0.16, t + dur * 0.7);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(am).connect(out).connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.02); lfo.start(t); lfo.stop(t + dur + 0.02);
+  },
+  // mastigando: estalinhos curtos e rápidos
+  munch(n = 5, delay = 0) {
+    if (this.muted || !this.ctx) return;
+    const c = this.ctx;
+    for (let i = 0; i < n; i++) {
+      const t = c.currentTime + delay + i * (0.09 + Math.random() * 0.04);
+      const nz = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+      nz.buffer = this.noiseBuf();
+      bp.type = 'bandpass'; bp.frequency.value = 1500 + Math.random() * 900; bp.Q.value = 3;
+      g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      nz.connect(bp).connect(g).connect(c.destination);
+      nz.start(t, Math.random() * 0.5, 0.05);
+    }
+  },
+  // resmungo de quem não gostou: ronco curto e mais grave
+  grunt() {
+    this.purr(0.28);
+    this.tone(260, 0.12, 'triangle', 0.06, -80, 0.05);
+  },
+  // compatibilidade: o "piu" antigo agora é um "uíí" de verdade
+  squeak() { this.wheek(2); },
   harvest(){ this.tone(523, 0.08, 'triangle', 0.1); this.tone(784, 0.12, 'triangle', 0.1, 0, 0.07); },
   water()  { this.tone(300, 0.2, 'sine', 0.08, 300); },
   alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },

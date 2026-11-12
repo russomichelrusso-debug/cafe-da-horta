@@ -78,7 +78,7 @@ const G = {
       SFX.coin();
     } else {
       this.s.acessorio = this.s.acessorio === id ? null : id;
-      SFX.squeak();
+      SFX.wheek(1);
     }
     this.save();
   },
@@ -418,19 +418,20 @@ const G = {
   feedJade(id) {
     const f = JADE_FOOD[id];
     if (!f) return;
-    if (f.recusa) { UI.jadeSay(f.fala); SFX.bad(); return; }
+    if (f.recusa) { UI.jadeSay(f.fala); SFX.grunt(); return; }
     if ((this.s.stock[id] || 0) <= 0) {
       UI.jadeSay((this.s.velho[id] || 0) > 0 ? 'Jade não come legume passado!' : `Sem ${ING[id].nome.toLowerCase()} fresco.`);
       return;
     }
-    if (this.s.jade.fome >= 98 && f.fome > 10) { UI.jadeSay('Jade está cheinha!'); return; }
+    if (this.s.jade.fome >= 98 && f.fome > 10) { UI.jadeSay('Jade está cheinha!'); SFX.grunt(); return; }
     this.s.stock[id]--;
     const j = this.s.jade;
     j.fome = clamp(j.fome + f.fome, 0, 100);
     j.alegria = clamp(j.alegria + f.alegria, 0, 100);
     fx('feed', { id });
     UI.jadeSay(f.fala, 'comendo');
-    SFX.squeak();
+    SFX.munch(5);
+    SFX.wheek(id === 'morango' ? 4 : 2, false, 0.65); // petisco = mais animada
     UI.dirty = true;
   },
   petJade() {
@@ -440,7 +441,7 @@ const G = {
     fx('pet');
     UI.jadeSay('Rrrrr… (ronronando)');
     UI.hearts();
-    SFX.squeak();
+    SFX.purr(1.1);
     UI.dirty = true;
   },
 
@@ -496,7 +497,10 @@ const G = {
     r.petCooldown = Math.max(0, r.petCooldown - dt);
     const helping = this.jadeHelping();
     if (helping !== r.jadeHelping) {
-      if (r.jadeHelping !== null) UI.toast(helping ? 'Jade acordou e voltou a ajudar!' : 'Jade ficou com fome e foi dormir…');
+      if (r.jadeHelping !== null) {
+        UI.toast(helping ? 'Jade acordou e voltou a ajudar!' : 'Jade ficou com fome e foi dormir…');
+        if (helping) SFX.wheek(3); else SFX.purr(0.6);
+      }
       r.jadeHelping = helping;
       UI.dirty = true;
     }
@@ -543,7 +547,7 @@ const G = {
       const ratio = c.patience / c.maxPatience;
       if (ratio < 0.33 && !c.alerted) {
         c.alerted = true;
-        if (helping) { SFX.squeak(); UI.toast(`Jade: uii! ${c.name} está com pressa!`); }
+        if (helping) { SFX.wheek(2, true); UI.toast(`Jade: uii! ${c.name} está com pressa!`); }
       }
       if (c.patience <= 0) {
         r.lost++;
