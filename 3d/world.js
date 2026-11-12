@@ -908,10 +908,13 @@ function loop(now) {
       buildDish(c);
       lastDish = { id: c ? c.id : null, n: c ? c.plate.items.length : 0 };
       // o ingrediente novo cai do alto no prato
-      if (c && c.plate.blend === null && c.plate.items.length === prevN + 1) {
+      // (só quando é o MESMO pedido e ganhou 1 item; antes, trocar para um suco vazio
+      //  procurava um pedaço que não existia e travava o 3D)
+      dropMesh = null;
+      if (c && prevN >= 0 && c.plate.blend === null && c.plate.items.length === prevN + 1) {
         const holder = jarContents || dish;
-        dropMesh = holder.children[holder.children.length - 1];
-        dropBase = dropMesh.position.y; dropT = 0.3;
+        dropMesh = holder.children[holder.children.length - 1] || null;
+        if (dropMesh) { dropBase = dropMesh.position.y; dropT = 0.3; }
       }
     }
     if (dropMesh && dropT > 0) { dropT -= dt; dropMesh.position.y = dropBase + Math.pow(Math.max(0, dropT) / 0.3, 2) * 0.55; }
@@ -961,11 +964,23 @@ function loop(now) {
   renderer.render(scene, camera);
 }
 
+// Rede de segurança: um erro num quadro não pode congelar o 3D para sempre
+// (o Three.js para de agendar quadros se o loop lançar uma exceção).
+let loopErrors = 0;
+function safeLoop(now) {
+  try { loop(now); }
+  catch (e) {
+    loopErrors++;
+    if (loopErrors <= 3) console.error('[3D] erro no quadro (o jogo continua):', e);
+    last = now; // evita um salto de tempo no próximo quadro
+  }
+}
+
 // economiza bateria: para quando o app sai da tela
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) renderer.setAnimationLoop(null);
-  else { last = performance.now(); renderer.setAnimationLoop(loop); }
+  else { last = performance.now(); renderer.setAnimationLoop(safeLoop); }
 });
-window.addEventListener('DOMContentLoaded', () => { place(); renderer.setAnimationLoop(loop); });
-if (document.readyState !== 'loading') { place(); renderer.setAnimationLoop(loop); }
-window.__world = { scene, camera, VIEWS, jade, mariaRoot, get jadeTrip() { return jadeTrip; }, get parts() { return parts.length; } }; // para depuração
+window.addEventListener('DOMContentLoaded', () => { place(); renderer.setAnimationLoop(safeLoop); });
+if (document.readyState !== 'loading') { place(); renderer.setAnimationLoop(safeLoop); }
+window.__world = { scene, camera, VIEWS, jade, mariaRoot, get jadeTrip() { return jadeTrip; }, get parts() { return parts.length; }, get loopErrors() { return loopErrors; } }; // para depuração
