@@ -43,11 +43,24 @@ const UI = {
     this.showTitle();
   },
 
-  // Palco fixo 960x440 escalado para caber na tela (com áreas seguras do notch)
+  // Palco de 440 de altura escalado para a tela toda; só o lado do notch fica livre.
+  // Em telas mais largas o palco estica na largura (a cozinha cresce, o resto acompanha).
   fit() {
+    const pr = this.el.probe || (this.el.probe = Object.assign(document.createElement('div'), {
+      style: 'position:fixed;visibility:hidden;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)' }));
+    if (!pr.isConnected) document.body.appendChild(pr);
+    const cs = getComputedStyle(pr), inL = parseFloat(cs.paddingLeft) || 0, inR = parseFloat(cs.paddingRight) || 0;
+    const ang = screen.orientation?.angle ?? window.orientation ?? 0;
+    // iPhone deitado: ângulo 90 = notch à esquerda; 270/-90 = notch à direita
+    const wr = this.el.wrap.style;
+    wr.left = (ang === 270 || ang === -90 ? 0 : inL) + 'px';
+    wr.right = (ang === 90 ? 0 : inR) + 'px';
+    wr.top = '0px'; wr.bottom = '0px';
     const w = this.el.wrap.clientWidth, h = this.el.wrap.clientHeight;
     this.scale = Math.min(w / 960, h / 440);
-    const x = (w - 960 * this.scale) / 2, y = (h - 440 * this.scale) / 2;
+    const sw = Math.min(1320, Math.max(960, w / this.scale));
+    const x = (w - sw * this.scale) / 2, y = (h - 440 * this.scale) / 2;
+    this.el.stage.style.width = sw + 'px';
     this.el.stage.style.transform = `translate(${x}px,${y}px) scale(${this.scale})`;
   },
 
