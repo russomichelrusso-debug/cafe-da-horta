@@ -1,6 +1,6 @@
 'use strict';
 // ===== Dados do jogo: ingredientes, receitas, horta, mercado =====
-const VERSAO = '1.16'; // aparece na tela inicial (para saber qual versão está rodando)
+const VERSAO = '1.17'; // aparece na tela inicial (para saber qual versão está rodando)
 
 const ING = {
   pao:       { nome: 'Pão' },
