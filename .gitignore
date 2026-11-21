@@ -5,3 +5,4 @@
 .claude/
 # Pacotes baixados (os sons usados ficam em sons/)
 *.zip
+__pycache__/
