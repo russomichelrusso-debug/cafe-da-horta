@@ -124,11 +124,56 @@ const SFX = {
   squeak() { this.wheek(2); },
   harvest(){ this.tone(523, 0.08, 'triangle', 0.1); this.tone(784, 0.12, 'triangle', 0.1, 0, 0.07); },
   water()  { this.tone(300, 0.2, 'sine', 0.08, 300); },
-  au(n = 2, delay = 0) {   // latido da Florzinha
-    for (let i = 0; i < n; i++) {
-      this.tone(420, 0.09, 'sawtooth', 0.1, -180, delay + i * 0.2);
-      this.tone(840, 0.05, 'square', 0.04, -320, delay + i * 0.2);
-    }
+  // ===== Florzinha (cachorrinha pequena), sintetizada até termos gravações dela =====
+  // "au" de cachorro pequeno: estalo agudo que cai de tom, com voz (dente de serra filtrada) e ar (ruído)
+  yap(t, vol = 0.22) {
+    const c = this.ctx, f0 = 900 + Math.random() * 180, dur = 0.11 + Math.random() * 0.03;
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const boca = c.createBiquadFilter();          // ressonância da boca ("formante")
+    boca.type = 'bandpass'; boca.Q.value = 2.2;
+    boca.frequency.setValueAtTime(2200, t);
+    boca.frequency.exponentialRampToValueAtTime(1300, t + dur);
+    boca.connect(out).connect(c.destination);
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.62, t + dur);
+    o.connect(boca);
+    const ar = c.createBufferSource(), arG = c.createGain();
+    ar.buffer = this.noiseBuf(); arG.gain.value = 0.6;
+    ar.connect(arG).connect(boca);
+    o.start(t); o.stop(t + dur + 0.02);
+    ar.start(t, Math.random() * 0.5); ar.stop(t + dur + 0.02);
+  },
+  au(n = 2, delay = 0) {   // latido da Florzinha: "au! au!" com ritmo irregular, como um cachorro de verdade
+    if (this.muted || !this.ctx) return;
+    let t = this.ctx.currentTime + delay;
+    for (let i = 0; i < n; i++) { this.yap(t); t += 0.17 + Math.random() * 0.12; }
+  },
+  // chorinho de "me dá comida": assobio nasal que sobe e desce, com tremidinho
+  choro(delay = 0) {
+    if (this.muted || !this.ctx) return;
+    const c = this.ctx, t = c.currentTime + delay, dur = 0.7;
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.09, t + 0.08);
+    out.gain.setValueAtTime(0.09, t + dur * 0.7);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const nariz = c.createBiquadFilter();
+    nariz.type = 'bandpass'; nariz.frequency.value = 1500; nariz.Q.value = 3;
+    nariz.connect(out).connect(c.destination);
+    const o = c.createOscillator(), lfo = c.createOscillator(), lfoG = c.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(1050, t);
+    o.frequency.linearRampToValueAtTime(1400, t + dur * 0.4);
+    o.frequency.linearRampToValueAtTime(900, t + dur);
+    lfo.frequency.value = 7; lfoG.gain.value = 35;
+    lfo.connect(lfoG).connect(o.frequency);
+    o.connect(nariz);
+    o.start(t); o.stop(t + dur); lfo.start(t); lfo.stop(t + dur);
   },
   plim()   { this.tone(1568, 0.12, 'sine', 0.1); this.tone(2093, 0.22, 'sine', 0.08, 0, 0.1); },   // pedido de delivery no app
   alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },

@@ -1,6 +1,6 @@
 'use strict';
 // ===== Dados do jogo: ingredientes, receitas, horta, mercado =====
-const VERSAO = '1.14'; // aparece na tela inicial (para saber qual versão está rodando)
+const VERSAO = '1.15'; // aparece na tela inicial (para saber qual versão está rodando)
 
 const ING = {
   pao:       { nome: 'Pão' },
@@ -104,6 +104,8 @@ const UPGRADES = [
   { id: 'casinha',    aba: 'jade',    em: '🏠', nome: 'Casinha de madeira',   precos: [60],     desc: ['A fome da Jade cai 40% mais devagar'] },
   { id: 'brinquedos', aba: 'jade',    em: '🧶', nome: 'Túnel e bolinha de feno', precos: [50],  desc: ['A alegria da Jade cai 50% mais devagar'] },
   { id: 'caminha',    aba: 'jade',    em: '🛏️', nome: 'Caminha no quintal',   precos: [70],     desc: ['A Florzinha late só metade das vezes que o motoboy chega'] },
+  { id: 'racao',      aba: 'jade',    em: '🥣', nome: 'Pote de ração',        precos: [55, 100], desc: ['A Florzinha pede comida 40% menos vezes', 'Automático: pede 70% menos vezes'] },
+  { id: 'passeio',    aba: 'jade',    em: '🦮', nome: 'Passeio no fim do dia', precos: [45],     desc: ['A Florzinha perde 10 de peso toda noite'] },
 ];
 // Acessórios só visuais: compra uma vez, depois toca para vestir/tirar
 const ACESSORIOS = [

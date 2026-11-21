@@ -117,7 +117,7 @@ const G = {
       // delivery: pedidos pelo app que o motoboy retira no balcão (não ocupam lugar na fila)
       deliv: { total: d.entregas, spawned: 0, times: [] },
       // Florzinha: late quando chega motoboy; de vez em quando pede comida
-      flor: { late: 0, pede: 0, proximo: 35 + Math.random() * 20, feliz: 0 },
+      flor: { late: 0, pede: 0, proximo: (35 + Math.random() * 20) * this.florIntervalo(), feliz: 0 },
     };
     this.save();
     UI.dirty = true;
@@ -233,6 +233,8 @@ const G = {
   },
 
   // ---------- Florzinha ----------
+  // Pote de ração: ela pede comida menos vezes (o intervalo entre pedidos fica maior)
+  florIntervalo() { return [1, 1 / 0.6, 1 / 0.3][this.lvl('racao')]; },
   florLate() {
     if (this.lvl('caminha') && Math.random() < 0.5) return;   // na caminha do quintal ela nem sempre escuta a moto
     const f = this.run.flor;
@@ -247,7 +249,7 @@ const G = {
     const f = this.run && this.run.flor;
     if (!f) return;
     if (f.late > 0) { f.late = 0; UI.toast('Shhh… a Florzinha se acalmou.'); fx('florCalma'); UI.dirty = true; return; }
-    if (f.pede > 0) { UI.toast('A Florzinha quer comida, não carinho… (cenoura!)'); SFX.au(1); return; }
+    if (f.pede > 0) { UI.toast('A Florzinha quer comida, não carinho… (cenoura!)'); SFX.choro(); return; }
     UI.toast('A Florzinha abanou o rabo 💕');
     fx('florCalma');
   },
@@ -259,7 +261,7 @@ const G = {
     this.s.stock[id]--;
     this.s.flor.peso = clamp(this.s.flor.peso + food.peso, 0, 100);
     f.pede = 0; f.late = 0; f.feliz = 6;
-    f.proximo = (id === 'cenoura' ? 60 : 45) + Math.random() * 25;
+    f.proximo = ((id === 'cenoura' ? 60 : 45) + Math.random() * 25) * this.florIntervalo();
     UI.toast(food.fala);
     fx('florCome');
     SFX.munch(4);
@@ -642,7 +644,7 @@ const G = {
       if (f.pede > 0) {
         f.pede -= dt;
         if (f.pede <= 0) {
-          f.pede = 0; f.proximo = 40 + Math.random() * 25;
+          f.pede = 0; f.proximo = (40 + Math.random() * 25) * this.florIntervalo();
           const opts = ['pao', 'queijo', 'cenoura', 'alface'].filter(id => (this.s.stock[id] || 0) > 0);
           if (opts.length) {
             const id = pick(opts);
@@ -658,7 +660,7 @@ const G = {
         f.pede = FLOR_PACIENCIA;
         UI.toast('🐶 A Florzinha está pedindo comida… (ela adora cenoura!)');
         fx('florPede');
-        SFX.au(1);
+        SFX.choro();
         UI.dirty = true;
       }
     }
@@ -733,7 +735,8 @@ const G = {
       r.log.push('💧 A irrigação quebrou de vez! Compre outra na loja');
     }
     if (this.s.faca < 35) r.log.push(`🔪 Faca com ${this.s.faca}% de fio`);
-    // Florzinha gordinha demais vai ao veterinário (e volta de dieta)
+    // Florzinha: o passeio da noite tira peso; gordinha demais vai ao veterinário (e volta de dieta)
+    if (this.lvl('passeio')) this.s.flor.peso = Math.max(0, this.s.flor.peso - 10);
     if (this.s.flor.peso >= FLOR_PESO_VET) {
       const preco = Math.min(this.s.coins, VET_PRECO);
       this.s.coins -= preco;
