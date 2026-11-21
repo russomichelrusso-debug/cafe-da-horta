@@ -1,6 +1,6 @@
 'use strict';
 // ===== Dados do jogo: ingredientes, receitas, horta, mercado =====
-const VERSAO = '1.13'; // aparece na tela inicial (para saber qual versão está rodando)
+const VERSAO = '1.14'; // aparece na tela inicial (para saber qual versão está rodando)
 
 const ING = {
   pao:       { nome: 'Pão' },
@@ -61,7 +61,22 @@ const PRAGA_LIMIT = 20;      // segundos até a lagarta acabar com a planta
 const CONSERTO_IRRIGACAO = 21;
 const LAVAR_TOQUES = 5;      // toques para lavar a louça
 // Quantos eventos surpresa por dia
-const EVENTOS_POR_DIA = day => day <= 1 ? 0 : day === 2 ? 1 : day < 6 ? 2 : 3;
+const EVENTOS_POR_DIA = day => day <= 1 ? 0 : day === 2 ? 1 : day < 6 ? 2 : day < 9 ? 3 : day < 12 ? 4 : 5;
+const NOTA_CRITICO = day => day >= 10 ? 95 : 90;   // o crítico fica mais exigente
+
+// ===== Delivery e Florzinha =====
+const MOTO_ESPERA = 12;      // segundos que o motoboy espera se o pedido não estiver pronto
+const TAXA_ENTREGA = 3;      // moedas a mais por delivery entregue
+const FLOR_LATIDO = 6;       // segundos latindo quando chega o motoboy (clientes perdem paciência mais rápido)
+const FLOR_PACIENCIA = 20;   // segundos pedindo comida antes de roubar um ingrediente
+const FLOR_PESO_VET = 75;    // peso (0-100) que, no fim do dia, leva a Florzinha ao veterinário
+const VET_PRECO = 20;
+// O que a Florzinha come: cenoura é saudável; pão e queijo ela ama, mas engordam
+const FLOR_FOOD = {
+  cenoura: { peso: -3, fala: '🥕 Crec, crec! A Florzinha amou a cenoura.' },
+  pao:     { peso: 12, fala: '🍞 Ela devorou o pão… mas engordou um pouquinho!' },
+  queijo:  { peso: 10, fala: '🧀 Queijo! Ela adorou… e a barriguinha cresceu.' },
+};
 const INFLACAO = 0.15; // +15% por compra repetida no mesmo dia
 
 // O que a Jade come (porquinho-da-índia: folhas e legumes, fruta só de petisco)
@@ -88,6 +103,7 @@ const UPGRADES = [
   { id: 'joaninhas',  aba: 'horta',   em: '🐞', nome: 'Joaninhas',            precos: [60],     desc: ['Comem as lagartas antes de atacarem a horta'] },
   { id: 'casinha',    aba: 'jade',    em: '🏠', nome: 'Casinha de madeira',   precos: [60],     desc: ['A fome da Jade cai 40% mais devagar'] },
   { id: 'brinquedos', aba: 'jade',    em: '🧶', nome: 'Túnel e bolinha de feno', precos: [50],  desc: ['A alegria da Jade cai 50% mais devagar'] },
+  { id: 'caminha',    aba: 'jade',    em: '🛏️', nome: 'Caminha no quintal',   precos: [70],     desc: ['A Florzinha late só metade das vezes que o motoboy chega'] },
 ];
 // Acessórios só visuais: compra uma vez, depois toca para vestir/tirar
 const ACESSORIOS = [
@@ -99,10 +115,12 @@ const ACESSORIOS = [
 // Dificuldade cresce a cada dia (modo desafio)
 function DIFF(day) {
   return {
-    total: Math.min(6 + day * 2, 16),          // clientes no dia
-    paciencia: Math.max(50, 100 - day * 7),     // segundos
-    intervalo: Math.max(7, 18 - day * 1.5),     // segundos entre clientes
+    total: Math.min(6 + day * 2, 22),          // clientes no dia
+    paciencia: Math.max(38, 100 - day * 7),     // segundos
+    intervalo: Math.max(5, 18 - day * 1.5),     // segundos entre clientes
     maxRecheio: Math.min(2 + Math.ceil(day / 2), 5),
     prep: 45,                                   // segundos de preparação antes de abrir
+    entregas: day < 3 ? 0 : day < 5 ? 1 : day < 8 ? 2 : day < 11 ? 3 : 4,   // pedidos de delivery
+    prazoEntrega: Math.max(40, 80 - day * 3),   // segundos até o motoboy chegar
   };
 }

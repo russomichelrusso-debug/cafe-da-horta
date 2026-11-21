@@ -40,6 +40,9 @@ const PBR = o => new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, 
 const mats = {};
 const M = c => mats[c] || (mats[c] = PBR({ color: c }));
 const own = c => PBR({ color: c }); // material próprio (cor muda)
+// Só peça com mais de ~6 cm faz sombra: olhos, botões e sementes não aparecem na sombra e
+// cada uma custaria um desenho a mais por quadro no celular.
+const fazSombra = o => { o.geometry.computeBoundingSphere(); return o.geometry.boundingSphere.radius > 0.06; };
 const sph = (r, w = 20, h = 14) => new THREE.SphereGeometry(r, w, h);
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 20) => new THREE.CylinderGeometry(rt, rb, h, s);
@@ -89,7 +92,7 @@ new GLTFLoader().load('modelos/cenario.glb', gltf => {
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     o.receiveShadow = true;
-    o.castShadow = !/^(chao_|horta_grama|parede_|grama_)/.test(o.name);   // chão e paredes só recebem sombra
+    o.castShadow = !o.name.startsWith('chao_') && fazSombra(o);   // chão, paredes e grama só recebem sombra
   });
   scene.add(gltf.scene);
 }, undefined, e => console.error('[3D] o cenário não carregou:', e));
@@ -134,7 +137,7 @@ let legs = [nada(), nada()], armL = nada(), armR = nada(), mCan = nada(), spout 
 let mEyes = [], mBrows = [];
 new GLTFLoader().load('modelos/maria.glb', gltf => {
   const q = n => gltf.scene.getObjectByName(n);
-  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = fazSombra(o); o.receiveShadow = true; } });
   legs = [q('maria_perna_L'), q('maria_perna_R')];
   armL = q('maria_braco_L'); armR = q('maria_braco_R');
   armL.rotation.z = -0.22; armR.rotation.z = 0.22;
@@ -161,7 +164,7 @@ let jEyes = [], jCan = new THREE.Object3D();
 const ACC = { lacinho: new THREE.Object3D(), chapeu: new THREE.Object3D(), cachecol: new THREE.Object3D() };
 new GLTFLoader().load('modelos/jade.glb', gltf => {
   const q = n => gltf.scene.getObjectByName(n);
-  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = fazSombra(o); o.receiveShadow = true; } });
   jEyes = [q('jade_olho_L'), q('jade_olho_R')];
   ACC.lacinho = q('jade_lacinho'); ACC.chapeu = q('jade_chapeu'); ACC.cachecol = q('jade_cachecol');
   jCan = q('jade_regador'); jCan.visible = !!jadeTrip;
@@ -176,9 +179,9 @@ const flor = group(-2.4, 0, 1.45);
 flor.rotation.y = 0.45;
 flor.scale.setScalar(1.15);
 const FLOR = {};      // partes animadas (vazio até o modelo chegar: o jogo roda sem ele)
-let florLate = 0;     // segundos de latido que faltam
+let florLate = 0, florAuT = 0;   // latido só de enfeite (fora do jogo) e intervalo entre os "AU!"
 new GLTFLoader().load('modelos/florzinha.glb', gltf => {
-  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = fazSombra(o); o.receiveShadow = true; } });
   flor.add(gltf.scene);
   for (const n of ['flor_corpo', 'flor_cabeca', 'flor_rabo', 'flor_olho_L', 'flor_olho_R', 'flor_boca']) FLOR[n] = gltf.scene.getObjectByName(n);
 }, undefined, e => console.error('[3D] a Florzinha não carregou:', e));
@@ -209,7 +212,7 @@ function buildCustomer(c) {
       if (o.name.startsWith('cliente_cabelo_estilo')) o.visible = o.name === 'cliente_cabelo_estilo' + L.style;
       if (o.name === 'cliente_coroa') o.visible = !!c.vip;
       if (!o.isMesh) return;
-      o.castShadow = true;
+      o.castShadow = fazSombra(o);
       for (const k in cores) if (o.name.includes('_' + k)) o.material = cores[k];
     });
     e.mouth = m.getObjectByName('cliente_boca');
@@ -222,7 +225,7 @@ function buildCustomer(c) {
 function syncCustomers(dt, t) {
   const r = G.run;
   const live = new Set();
-  r.customers.forEach((c, i) => {
+  r.customers.filter(c => !c.delivery).forEach((c, i) => {   // delivery não vai para a fila
     live.add(c.id);
     let e = custs.get(c.id);
     if (!e) { e = buildCustomer(c); custs.set(c.id, e); }
@@ -260,9 +263,28 @@ const LAYER = {
   pao: ['#f3d39a', 0.07, 0.46], alface: ['#5fb548', 0.035, 0.52], tomate_f: ['#e5412f', 0.04, 0.42],
   cenoura_r: ['#f28a1c', 0.035, 0.4], queijo: ['#f9d95e', 0.03, 0.48], molho: ['#f4efe0', 0.025, 0.38],
 };
-const ITEM_COLOR = { alface: '#5fb548', tomate_f: '#e5412f', cenoura_r: '#f28a1c', queijo: '#f9d95e', molho: '#f4efe0' };
 const jarMat = PBR({ color: '#dff4ff', roughness: 0.05, transparent: true, opacity: 0.35 }); // vidro
 let jarContents = null;
+
+// Moldes do Blender (blender/comidas.py): louça, camadas, itens da tábua e plantas.
+// copia('nome') devolve uma cópia pronta; escurecer > 0 = ingrediente passado (cor amarronzada).
+let comidas = null;
+new GLTFLoader().load('modelos/comidas.glb', gltf => {
+  comidas = gltf.scene;
+  dishKey = ''; boardKey = ''; plotGroups.forEach(pg => { pg.key = ''; });   // refaz o que já estava na tela
+}, undefined, e => console.error('[3D] as comidas não carregaram:', e));
+function copia(nome, escurecer = 0) {
+  const molde = comidas && comidas.getObjectByName(nome);
+  if (!molde) return new THREE.Group();
+  const c = molde.clone(true);
+  c.position.set(0, 0, 0);
+  c.traverse(m => {
+    if (!m.isMesh) return;
+    m.castShadow = fazSombra(m);
+    if (escurecer) { m.material = m.material.clone(); m.material.color.set(tint('#' + m.material.color.getHexString(), escurecer)); }
+  });
+  return c;
+}
 
 function buildDish(c) {
   clearGroup(dish);
@@ -270,22 +292,27 @@ function buildDish(c) {
   const recipe = c ? c.order.recipe : 'sanduiche';
   const items = c ? c.plate.items : [];
   if (recipe === 'sanduiche') {
-    mesh(cyl(0.36, 0.3, 0.04, 28), '#ffffff', 0, 0.02, 0, { p: dish });
-    let y = 0.045;
+    dish.add(copia('prato'));
+    let y = 0.016;
     for (const id of items) {
-      const [col, h, w] = LAYER[id] || ['#ccc', 0.03, 0.4];
-      mesh(box(w, h, w * 0.85), col, 0, y + h / 2, 0, { p: dish, r: [0, (y * 37) % 0.3 - 0.15, 0] });
-      y += h;
+      const camada = copia(id);
+      camada.position.y = y;
+      camada.rotation.y = (y * 37) % 0.3 - 0.15;
+      dish.add(camada);
+      y += (LAYER[id] || [0, 0.03])[1];
     }
   } else if (recipe === 'salada') {
-    mesh(new THREE.SphereGeometry(0.38, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), '#ffffff', 0, 0.36, 0, { p: dish });
-    mesh(cyl(0.36, 0.36, 0.02, 24), '#e7f3f7', 0, 0.34, 0, { p: dish, cast: false });
+    dish.add(copia('tigela'));
     items.forEach((id, i) => {
-      const a = i * 2.4, rr = 0.08 + (i % 3) * 0.08;
-      mesh(sph(0.09), ITEM_COLOR[id] || '#ccc', Math.cos(a) * rr, 0.36 + (i % 2) * 0.04, Math.sin(a) * rr, { p: dish, s: [1.2, 0.6, 1] });
+      const a = i * 2.4, rr = 0.06 + (i % 3) * 0.07;
+      const it = copia(id);
+      it.scale.setScalar(0.38);
+      it.position.set(Math.cos(a) * rr, 0.22 + (i % 2) * 0.03 + i * 0.006, Math.sin(a) * rr);
+      it.rotation.y = a;
+      dish.add(it);
     });
   } else {
-    mesh(box(0.36, 0.22, 0.36), '#8e5bd6', 0, 0.11, 0, { p: dish });
+    dish.add(copia('liquidificador'));
     mesh(cyl(0.17, 0.13, 0.6), jarMat, 0, 0.52, 0, { p: dish, cast: false });
     jarContents = group(0, 0.24, 0, dish);
     if (c && c.plate.blend !== null) {
@@ -305,14 +332,8 @@ function buildBoard(b) {
   clearGroup(onBoard);
   if (!b) return;
   const cut = b.chops >= Math.ceil(G.chopsNeeded() / 2);
-  const old = b.velho;
-  if (b.id === 'tomate') {
-    if (!cut) { mesh(sph(0.18), old ? tint('#e5412f') : '#e5412f', 0, 0.18, 0, { p: onBoard }); mesh(cone(0.06, 0.06), '#3e9a3a', 0, 0.37, 0, { p: onBoard }); }
-    else for (let i = 0; i < 3; i++) mesh(cyl(0.15, 0.15, 0.03), old ? tint('#f2665a') : '#f2665a', -0.15 + i * 0.13, 0.03 + i * 0.01, 0, { p: onBoard, r: [0, 0, -0.35] });
-  } else {
-    if (!cut) { mesh(cone(0.09, 0.55), old ? tint('#f28a1c') : '#f28a1c', 0, 0.09, 0, { p: onBoard, r: [0, 0, Math.PI / 2] }); mesh(cone(0.04, 0.2), '#4fa83d', -0.35, 0.09, 0, { p: onBoard, r: [0, 0, Math.PI / 2] }); }
-    else for (let i = 0; i < 9; i++) mesh(box(0.22, 0.025, 0.025), old ? tint('#f28a1c') : '#f28a1c', ((i * 31) % 9 - 4) / 30, 0.02 + (i % 3) * 0.02, ((i * 17) % 9 - 4) / 30, { p: onBoard, r: [0, i * 0.7, 0] });
-  }
+  const nome = b.id === 'tomate' ? (cut ? 'tabua_tomate_fatiado' : 'tabua_tomate') : (cut ? 'tabua_cenoura_ralada' : 'tabua_cenoura');
+  onBoard.add(copia(nome, b.velho ? 0.55 : 0));
 }
 
 // ================= HORTA =================
@@ -332,36 +353,15 @@ function ensurePlots() {
 function buildPlant(pg, p) {
   clearGroup(pg.plant); clearGroup(pg.bug);
   if (!p.crop) return;
-  const o = { p: pg.plant };
-  const c = col => p.stage === 'passado' ? tint(col) : p.stage === 'murcho' ? tint(col, 0.8) : col;
   const prog = p.stage === 'growing' ? p.grow / CROPS[p.crop].tempo : 1;
-  if (p.stage === 'murcho') {
-    mesh(cyl(0.02, 0.03, 0.3), '#8a7b5a', 0, 0.15, 0, { ...o, r: [0, 0, 0.6] });
-    mesh(sph(0.12), '#a39466', 0.15, 0.22, 0, { ...o, s: [1.3, 0.4, 1] });
-  } else if (prog < 0.35) {
-    mesh(cyl(0.015, 0.02, 0.2), '#4fa83d', 0, 0.1, 0, o);
-    mesh(sph(0.07), '#6cc04a', -0.06, 0.2, 0, { ...o, s: [1.4, 0.4, 0.8] });
-    mesh(sph(0.07), '#6cc04a', 0.06, 0.22, 0, { ...o, s: [1.4, 0.4, 0.8] });
-  } else if (p.crop === 'alface') {
-    [[0, 0], [0.22, 0.15], [-0.22, 0.12], [0.1, -0.22], [-0.14, -0.18]].forEach(([x, z]) => mesh(sph(0.2), c('#5fb548'), x, 0.14, z, { ...o, s: [1, 0.7, 1] }));
-  } else if (p.crop === 'cenoura') {
-    [[-0.3, 0], [0, 0.2], [0.3, -0.1]].forEach(([x, z]) => {
-      mesh(cone(0.08, 0.25), c('#f28a1c'), x, 0.04, z, { ...o, r: [Math.PI, 0, 0] });
-      for (const a of [-0.4, 0, 0.4]) mesh(cone(0.03, 0.32), c('#4fa83d'), x + a * 0.12, 0.32, z, { ...o, r: [0, 0, a] });
-    });
-  } else if (p.crop === 'tomate') {
-    mesh(cyl(0.03, 0.04, 0.9), c('#4f8a3a'), 0, 0.45, 0, o);
-    [[0.14, 0.45], [-0.14, 0.68], [0.11, 0.86]].forEach(([x, y]) => mesh(sph(0.15), c('#4fa83d'), x, y, 0, { ...o, s: [1.3, 0.6, 1] }));
-    if (prog >= 0.7) [[0.18, 0.36], [-0.17, 0.58], [0.05, 0.78]].forEach(([x, y]) => mesh(sph(0.09), c('#e5412f'), x, y, 0.1, o));
-  } else if (p.crop === 'morango') {
-    [[-0.28, 0], [0.28, 0.1], [0, -0.28]].forEach(([x, z]) => {
-      mesh(sph(0.19), c('#4fa83d'), x, 0.1, z, { ...o, s: [1.2, 0.55, 1.2] });
-      if (prog >= 0.7) mesh(cone(0.06, 0.13), c('#e3304a'), x + 0.1, 0.07, z + 0.14, { ...o, r: [Math.PI, 0, 0] });
-    });
-  }
-  if (p.praga) { // lagarta
-    for (let i = 0; i < 4; i++) mesh(sph(0.05), '#7cc14e', -0.12 + i * 0.07, 0.42, 0.15, { p: pg.bug });
-    mesh(sph(0.06), '#3e7a2a', 0.17, 0.44, 0.15, { p: pg.bug });
+  const nome = p.stage === 'murcho' ? 'planta_murcha' : prog < 0.35 ? 'planta_broto' : 'planta_' + p.crop;
+  const planta = copia(nome, p.stage === 'passado' ? 0.55 : 0);
+  planta.traverse(o => { if (o.name.endsWith('_frutos')) o.visible = prog >= 0.7; });   // fruto só quando amadurece
+  pg.plant.add(planta);
+  if (p.praga) {
+    const lagarta = copia('lagarta');
+    lagarta.position.set(0, 0.17, 0.15);
+    pg.bug.add(lagarta);
   }
 }
 function syncPlots(dt, t) {
@@ -389,6 +389,42 @@ const rainGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Bu
 const rain = new THREE.Points(rainGeo, new THREE.PointsMaterial({ color: '#8fbfe8', size: 0.06, transparent: true, opacity: 0.8 }));
 rain.visible = false;
 scene.add(rain);
+
+// ================= DELIVERY: motoboy e sacolas no balcão =================
+const moto = group(ENTRY.x, 0, ENTRY.z);
+moto.visible = false;
+new GLTFLoader().load('modelos/motoboy.glb', gltf => {
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = fazSombra(o); o.receiveShadow = true; } });
+  moto.add(gltf.scene);
+}, undefined, e => console.error('[3D] o motoboy não carregou:', e));
+const MOTO_SPOT = V(3.55, 0, 0.95);        // ponta direita do balcão (fora da coluna de comandas)
+const sacolas = group(1.95, TOP, -0.3);    // sacolas prontas esperando o motoboy
+let nSacolas = -1;
+function sacola() {
+  const g = new THREE.Group();
+  mesh(box(0.22, 0.26, 0.14), '#c9a06a', 0, 0.13, 0, { p: g });
+  mesh(new THREE.TorusGeometry(0.06, 0.012, 6, 12, Math.PI), '#8a6a3a', 0, 0.26, 0, { p: g });
+  return g;
+}
+function syncMotoboy(dt, t) {
+  const ds = G.run.customers.filter(c => c.delivery);
+  const n = ds.filter(c => c.state === 'embalado').length;
+  if (n !== nSacolas) {
+    nSacolas = n; clearGroup(sacolas);
+    for (let i = 0; i < n; i++) { const s = sacola(); s.position.x = i * 0.28; sacolas.add(s); }
+  }
+  const aqui = ds.some(c => c.moto);   // um motoboy busca todos os pedidos que estiverem esperando por ele
+  if (aqui && !moto.visible) { moto.visible = true; moto.position.copy(ENTRY); }
+  if (!moto.visible) return;
+  const alvo = aqui ? MOTO_SPOT : EXIT;
+  const d = alvo.clone().sub(moto.position); d.y = 0;
+  if (d.length() > 0.05) {
+    moto.position.add(d.multiplyScalar(Math.min(1, dt * 2.2)));
+    moto.position.y = Math.abs(Math.sin(t * 10)) * 0.06;
+    moto.rotation.y = Math.atan2(alvo.x - moto.position.x, alvo.z - moto.position.z);
+  } else if (aqui) { moto.position.y = 0; moto.rotation.y = lerpAngle(moto.rotation.y, Math.PI + 0.5, Math.min(1, dt * 6)); }
+  else moto.visible = false;   // saiu pela porta
+}
 
 // ================= CÂMERAS =================
 const VIEWS = {
@@ -443,7 +479,7 @@ const bar = (el, sel, v, low) => {
 
 function customerLabels() {
   const r = G.run;
-  return r.customers.map((c, i) => {
+  return r.customers.filter(c => !c.delivery).map((c, i) => {
     const e = custs.get(c.id);
     const key = `c${c.id}:${c.state}`;
     const recipe = RECIPES[c.order.recipe];
@@ -514,7 +550,7 @@ document.getElementById('stage').addEventListener('click', e => {
   let o = hit.object;
   while (o.parent && !targets.includes(o)) o = o.parent;
   if (o === jade) { if (jadeHop <= 0) { jadeHop = 1; SFX.wheek(3); } return; }
-  if (o === flor) { if (florLate <= 0) { florLate = 1.2; floatText('AU! AU!', flor.position.clone().add(V(0, 1.35, 0))); } return; }
+  if (o === flor) { G.calmFlor(); return; }   // carinho: acalma o latido (a lógica fica no game.js)
   for (const [id, c] of custs) if (c.g === o) {
     const cu = G.cust(id);
     if (cu && cu.state === 'chegou') G.takeOrder(id);
@@ -666,6 +702,14 @@ window.onGameEvent = (name, d) => {
       for (let i = 0; i < 4; i++) spawn(h.clone().add(rnd3(0.12)), V(0, 0, 0), FOOD_COLOR[d.id] || '#5fb548', 0.6 + i * 0.12, 0.06, 0);
       break;
     }
+    case 'florCome': {
+      const h = flor.position.clone().add(V(0.1, 0.75, 0.25));
+      for (let i = 0; i < 6; i++) spawn(h.clone().add(rnd3(0.1)), V((Math.random() - 0.5), 1 + Math.random(), 0.5), '#f28a1c', 0.8, 0.04);
+      floatText('💕', flor.position.clone().add(V(0, 1.3, 0)), '#000', null);
+      break;
+    }
+    case 'florPede': floatText('🥕?', flor.position.clone().add(V(0, 1.35, 0)), '#3b2a1e', '#ffffff'); break;
+    case 'delivery': floatText('🛵 Delivery!', V(2.4, 2.2, 0), '#ffffff', '#e5412f'); break;
     case 'pet': {
       const top = jade.position.clone().add(V(0, 1.0, 0));
       for (let i = 0; i < 3; i++) floatText('💗', top.clone().add(V((i - 1) * 0.3, 0, 0)), '#000', null, i * 0.2);
@@ -784,13 +828,16 @@ function loop(now) {
   }
   // Florzinha: respira, abana o rabo, inclina a cabeça, pisca; ao tocar, late
   if (FLOR.flor_cabeca) {
+    const fl = inGame ? G.run.flor : null;
     florLate = Math.max(0, florLate - dt);
-    const au = florLate > 0 ? Math.abs(Math.sin(florLate * 14)) : 0;
+    const latindo = (fl && fl.late > 0) || florLate > 0, pede = !!(fl && fl.pede > 0);
+    if (latindo && (florAuT -= dt) <= 0) { florAuT = 1.1; floatText('AU! AU!', flor.position.clone().add(V(0, 1.35, 0))); }
+    const au = latindo ? Math.abs(Math.sin(t * 12)) : 0;
     FLOR.flor_corpo.scale.y = 1 + Math.sin(t * 2.2) * 0.015;
-    FLOR.flor_rabo.rotation.z = Math.sin(t * (florLate > 0 ? 18 : 7)) * 0.35;
-    FLOR.flor_cabeca.rotation.z = florLate > 0 ? 0 : Math.sin(t * 0.6) * 0.12;
-    FLOR.flor_cabeca.rotation.x = -au * 0.25;   // ergue a cabeça a cada "au"
-    FLOR.flor_boca.scale.y = 1 + au * 2.5;
+    FLOR.flor_rabo.rotation.z = Math.sin(t * (latindo || pede ? 18 : 7)) * 0.35;
+    FLOR.flor_cabeca.rotation.z = latindo ? 0 : pede ? Math.sin(t * 3) * 0.15 : Math.sin(t * 0.6) * 0.12;
+    FLOR.flor_cabeca.rotation.x = -au * 0.25 - (pede ? 0.2 : 0);   // ergue a cabeça a cada "au" e quando pede
+    FLOR.flor_boca.scale.y = 1 + au * 2.5 + (pede ? 0.8 : 0);
     for (const e of [FLOR.flor_olho_L, FLOR.flor_olho_R]) e.scale.y = blinkT < 0.12 ? 0.15 : 1;
   }
 
@@ -800,6 +847,7 @@ function loop(now) {
   if (inGame) {
     const r = G.run;
     syncCustomers(dt, t);
+    syncMotoboy(dt, t);
     syncPlots(dt, t);
 
     // prato / tigela / liquidificador do pedido selecionado
@@ -892,4 +940,4 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('DOMContentLoaded', () => { place(); renderer.setAnimationLoop(safeLoop); });
 if (document.readyState !== 'loading') { place(); renderer.setAnimationLoop(safeLoop); }
-window.__world = { scene, camera, VIEWS, jade, mariaRoot, get jadeTrip() { return jadeTrip; }, get parts() { return parts.length; }, get loopErrors() { return loopErrors; } }; // para depuração
+window.__world = { scene, camera, renderer, VIEWS, jade, mariaRoot, get jadeTrip() { return jadeTrip; }, get parts() { return parts.length; }, get loopErrors() { return loopErrors; } }; // para depuração

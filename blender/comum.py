@@ -251,6 +251,34 @@ def ponto(nome, pos, pai=None):
     return ob
 
 
+def juntar_por_material(sem_sombra=('chao_', 'horta_grama', 'parede_', 'grama_')):
+    """Junta todas as peças PARADAS que usam o mesmo material numa malha só (menos desenhos por quadro
+    no celular). Só para o cenário: depois disso as peças perdem o nome de cada uma.
+    Peças que não fazem sombra (chão, paredes, grama) ficam num grupo próprio chamado chao_N."""
+    bpy.context.view_layer.update()
+    grupos = {}
+    for ob in [o for o in bpy.data.objects if o.type == 'MESH']:
+        chao = ob.name.startswith(sem_sombra)
+        grupos.setdefault((ob.data.materials[0].name, chao), []).append(ob)
+    for i, ((mat, chao), obs) in enumerate(grupos.items()):
+        bm = bmesh.new()
+        for ob in obs:
+            me = ob.data.copy()
+            me.transform(ob.matrix_world)
+            bm.from_mesh(me)
+            bpy.data.meshes.remove(me)
+        nome = f'{"chao" if chao else "peca"}_{i}'
+        novo = bpy.data.meshes.new(nome)
+        bm.to_mesh(novo)
+        bm.free()
+        novo.materials.append(bpy.data.materials[mat])
+        for ob in obs:
+            bpy.data.objects.remove(ob, do_unlink=True)
+        o = bpy.data.objects.new(nome, novo)
+        bpy.context.collection.objects.link(o)
+    print(f'[juntar] {len(grupos)} malhas no lugar das peças soltas')
+
+
 def exportar(arquivo):
     os.makedirs(SAIDA, exist_ok=True)
     caminho = os.path.join(SAIDA, arquivo)

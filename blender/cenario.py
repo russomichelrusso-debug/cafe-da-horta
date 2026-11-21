@@ -8,7 +8,7 @@ import math, os, random, sys
 import bmesh
 from mathutils import Matrix
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from comum import bolhas, torno, tufos, _novo, _aplicar, _liso, limpar, exportar, previas, pasta_previas
+from comum import bolhas, torno, tufos, _novo, _aplicar, _liso, limpar, exportar, previas, pasta_previas, juntar_por_material
 
 B = lambda x, y, z: (x, -z, y)  # jogo -> Blender
 rng = random.Random(7)
@@ -137,6 +137,7 @@ while len(folhas) < 180:
                        (rng.uniform(-25, 25), rng.uniform(-25, 25), a)))
 bolhas('grama_tufos', folhas, '#6fbf4f', voxel=0, seg=(5, 3), rug=0.9)
 
+juntar_por_material()
 exportar('cenario.glb')
 previas('cenario', pasta_previas(), alvo=(1.5, 0, 0.8), dist=9.0,
         vistas=(('balcao', -6, 9.0, (0.7, -0.2, 1.0)), ('cozinha', 30, 5.0, (-5.2, 1.0, 1.0)), ('horta', -10, 9.0, (8.5, 0, 0.3))))

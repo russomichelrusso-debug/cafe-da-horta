@@ -35,6 +35,7 @@ const G = {
         { crop: null }, { crop: null },
       ],
       jade: { fome: 70, alegria: 70 },
+      flor: { peso: 45 },   // Florzinha: peso alto = veterinário no fim do dia
       up: {}, acessorios: [], acessorio: null,
       faca: 100, aduboDias: 0, irrigQuebrada: false,
       eventBag: [], lastEvent: null,
@@ -94,7 +95,7 @@ const G = {
     this.s = (continuar && this.load()) || this.newState();
     // saves de versões antigas não têm estes campos
     const def = this.newState();
-    for (const k of ['up', 'acessorios', 'acessorio', 'velho', 'faca', 'aduboDias', 'irrigQuebrada', 'eventBag', 'lastEvent']) {
+    for (const k of ['up', 'acessorios', 'acessorio', 'velho', 'faca', 'aduboDias', 'irrigQuebrada', 'eventBag', 'lastEvent', 'flor']) {
       if (this.s[k] === undefined) this.s[k] = def[k];
     }
     if (this.s.up.adubo) { delete this.s.up.adubo; this.s.aduboDias = 3; } // adubo virou item do mercado
@@ -113,6 +114,10 @@ const G = {
       // eventos surpresa
       evQueue: [], ev: { rush: 0, chuva: 0, luz: 0 }, jadeFuga: 0,
       nextVip: false, nextAlergico: false, pratos: null, lavar: 0, log: [],
+      // delivery: pedidos pelo app que o motoboy retira no balcão (não ocupam lugar na fila)
+      deliv: { total: d.entregas, spawned: 0, times: [] },
+      // Florzinha: late quando chega motoboy; de vez em quando pede comida
+      flor: { late: 0, pede: 0, proximo: 35 + Math.random() * 20, feliz: 0 },
     };
     this.save();
     UI.dirty = true;
@@ -124,6 +129,10 @@ const G = {
     this.run.openAt = this.run.time;
     this.run.spawnTimer = 1;
     EV.schedule();
+    // horários dos deliverys: espalhados pelo turno, com uma variação
+    const r = this.run, n = r.deliv.total;
+    const dur = Math.max(60, r.diff.total * r.diff.intervalo * 0.9);
+    r.deliv.times = Array.from({ length: n }, (_, i) => 15 + (dur - 30) * (i + 0.2 + Math.random() * 0.6) / n);
     SFX.bell();
     UI.toast('Portas abertas! Os clientes estão chegando.');
     UI.dirty = true;
@@ -185,6 +194,75 @@ const G = {
     r.customers.push(c);
     r.spawned++;
     SFX.bell();
+    UI.dirty = true;
+  },
+
+  // ---------- Delivery ----------
+  // O pedido chega pelo app (já anotado). O motoboy chega no prazo: se a sacola estiver pronta,
+  // leva e paga; se não, espera MOTO_ESPERA segundos e vai embora (perde 1 ❤️).
+  spawnDelivery() {
+    const r = this.run, pat = r.diff.prazoEntrega;
+    r.deliv.spawned++;
+    const c = {
+      id: r.nextNum++, name: `Delivery ${r.deliv.spawned}`, delivery: true, look: null,
+      state: 'esperando', order: this.newOrder(), moto: false,
+      patience: pat, maxPatience: pat, alerted: false,
+      plate: { items: [], blend: null, bad: 0 },
+      arrivedAt: r.time, takenAt: r.time, prepStartAt: null,
+    };
+    r.customers.push(c);
+    if (!r.selected) r.selected = c.id;
+    SFX.plim();
+    UI.alert('🛵', `${c.name} pelo app!`, `${RECIPES[c.order.recipe].nome} · o motoboy chega em ${Math.round(pat)}s`);
+    fx('delivery', { id: c.id });
+    UI.dirty = true;
+  },
+  // Motoboy leva a sacola pronta e paga (nota foi dada ao embalar)
+  pickup(c) {
+    const r = this.run, rec = RECIPES[c.order.recipe];
+    const gain = Math.round(rec.preco * c.nota / 100) + TAXA_ENTREGA;
+    this.s.coins += gain;
+    r.earned += gain;
+    r.served++;
+    r.scores.push(c.nota);
+    r.customers = r.customers.filter(x => x !== c);
+    UI.toast(`🛵 O motoboy levou o ${c.name}: +${gain}`);
+    fx('motoboySai', { id: c.id, ok: true });
+    SFX.coin();
+    UI.dirty = true;
+  },
+
+  // ---------- Florzinha ----------
+  florLate() {
+    if (this.lvl('caminha') && Math.random() < 0.5) return;   // na caminha do quintal ela nem sempre escuta a moto
+    const f = this.run.flor;
+    f.late = FLOR_LATIDO;
+    SFX.au(3);
+    UI.toast('🐶 Au! Au! A Florzinha está latindo pro motoboy (toque nela para acalmar)');
+    fx('latido');
+    UI.dirty = true;
+  },
+  // carinho: acalma o latido
+  calmFlor() {
+    const f = this.run && this.run.flor;
+    if (!f) return;
+    if (f.late > 0) { f.late = 0; UI.toast('Shhh… a Florzinha se acalmou.'); fx('florCalma'); UI.dirty = true; return; }
+    if (f.pede > 0) { UI.toast('A Florzinha quer comida, não carinho… (cenoura!)'); SFX.au(1); return; }
+    UI.toast('A Florzinha abanou o rabo 💕');
+    fx('florCalma');
+  },
+  // comida: cenoura é saudável e segura mais tempo; pão e queijo ela ama, mas engordam
+  feedFlor(id = 'cenoura') {
+    const f = this.run && this.run.flor, food = FLOR_FOOD[id];
+    if (!f || !food) return;
+    if ((this.s.stock[id] || 0) <= 0) { UI.toast(`Sem ${ING[id].nome.toLowerCase()}!`); SFX.bad(); return; }
+    this.s.stock[id]--;
+    this.s.flor.peso = clamp(this.s.flor.peso + food.peso, 0, 100);
+    f.pede = 0; f.late = 0; f.feliz = 6;
+    f.proximo = (id === 'cenoura' ? 60 : 45) + Math.random() * 25;
+    UI.toast(food.fala);
+    fx('florCome');
+    SFX.munch(4);
     UI.dirty = true;
   },
 
@@ -253,6 +331,19 @@ const G = {
     const r = this.run, c = this.selectedCust();
     if (!c || !c.plate.items.length) return;
     if (c.order.recipe === 'suco' && c.plate.blend === null) { UI.toast('Bata o suco antes de servir!'); return; }
+    if (c.delivery) {   // delivery vai na sacola (sem louça): a nota sai agora, o dinheiro quando o motoboy levar
+      const card = scoreDish(c, r.time);
+      c.nota = card.total;
+      c.state = 'embalado';
+      UI.scoreCard(c.name, card);
+      fx('embalar', { id: c.id });
+      SFX.add();
+      const next = r.customers.find(x => x.state === 'esperando');
+      r.selected = next ? next.id : null;
+      if (c.moto) this.pickup(c);
+      else { UI.toast(`🛍️ ${c.name} embalado! O motoboy leva quando chegar.`); UI.dirty = true; }
+      return;
+    }
     if (r.pratos !== null && r.pratos <= 0) { UI.toast('Sem louça limpa! Lave antes de servir.'); SFX.bad(); return; }
     if (r.pratos !== null) r.pratos--;
     const card = scoreDish(c, r.time);
@@ -263,8 +354,9 @@ const G = {
     const tip = score >= 70 ? Math.round(rec.preco * 0.6 * ratio) : 0;
     let gain = Math.round(rec.preco * score / 100) + tip;
     if (c.vip) {
-      if (score >= 90) { gain *= 3; UI.alert('⭐', 'O crítico adorou!', `Pagou o triplo: +${gain}`); r.log.push(`⭐ Crítico adorou (nota ${score})`); }
-      else { r.lost++; UI.alert('📝', 'O crítico não gostou…', 'Nota abaixo de 90: você perdeu 1 ❤️'); r.log.push(`📝 Crítico reprovou (nota ${score})`); SFX.bad(); }
+      const minimo = NOTA_CRITICO(this.s.day);
+      if (score >= minimo) { gain *= 3; UI.alert('⭐', 'O crítico adorou!', `Pagou o triplo: +${gain}`); r.log.push(`⭐ Crítico adorou (nota ${score})`); }
+      else { r.lost++; UI.alert('📝', 'O crítico não gostou…', `Nota abaixo de ${minimo}: você perdeu 1 ❤️`); r.log.push(`📝 Crítico reprovou (nota ${score})`); SFX.bad(); }
     }
     if (c.order.sem && card.alergia) r.log.push(`🚫 ${c.name} recebeu ${ING[c.order.sem].nome.toLowerCase()}!`);
     this.s.coins += gain;
@@ -281,7 +373,7 @@ const G = {
   leave(c, mood, label) {
     const r = this.run;
     r.customers = r.customers.filter(x => x !== c);
-    r.leaving.push({ look: c.look, mood, label, t: 1.6 });
+    if (!c.delivery) r.leaving.push({ look: c.look, mood, label, t: 1.6 });
     if (r.selected === c.id) {
       const next = r.customers.find(x => x.state === 'esperando');
       r.selected = next ? next.id : null;
@@ -533,16 +625,69 @@ const G = {
 
     EV.update(dt);
 
-    // Chegada de clientes (mais rápido na hora do rush)
+    // Chegada de clientes (mais rápido na hora do rush); delivery não ocupa lugar no balcão
     r.spawnTimer -= dt * (r.ev.rush > 0 ? 2.5 : 1);
-    if (r.spawnTimer <= 0 && r.spawned < r.diff.total && r.customers.length < this.maxSpots()) {
+    if (r.spawnTimer <= 0 && r.spawned < r.diff.total && r.customers.filter(c => !c.delivery).length < this.maxSpots()) {
       this.spawnCustomer();
       r.spawnTimer = r.diff.intervalo * (0.8 + Math.random() * 0.4);
     }
+    // Pedidos de delivery pelo app
+    if (r.deliv.times.length && r.time - r.openAt >= r.deliv.times[0]) { r.deliv.times.shift(); this.spawnDelivery(); }
 
-    // Paciência (chuva deixa todo mundo mais impaciente)
-    const patRate = raining ? 1.25 : 1;
+    // Florzinha: latido passa sozinho; de tempos em tempos pede comida e, se ninguém der, rouba
+    const f = r.flor;
+    if (f.late > 0 && (f.late -= dt) <= 0) { f.late = 0; UI.dirty = true; }     // parou de latir: redesenha
+    if (f.feliz > 0 && (f.feliz -= dt) <= 0) { f.feliz = 0; UI.dirty = true; }
+    if (this.s.day >= 2) {
+      if (f.pede > 0) {
+        f.pede -= dt;
+        if (f.pede <= 0) {
+          f.pede = 0; f.proximo = 40 + Math.random() * 25;
+          const opts = ['pao', 'queijo', 'cenoura', 'alface'].filter(id => (this.s.stock[id] || 0) > 0);
+          if (opts.length) {
+            const id = pick(opts);
+            this.s.stock[id]--;
+            this.s.flor.peso = clamp(this.s.flor.peso + 6, 0, 100);   // comida roubada também engorda
+            UI.alert('🐶', 'A Florzinha roubou comida!', `Ninguém deu cenoura… ela pegou 1 ${ING[id].nome.toLowerCase()}`);
+            r.log.push(`🐶 Florzinha roubou 1 ${ING[id].nome.toLowerCase()}`);
+          }
+          SFX.au(1);
+          UI.dirty = true;
+        }
+      } else if ((f.proximo -= dt) <= 0) {
+        f.pede = FLOR_PACIENCIA;
+        UI.toast('🐶 A Florzinha está pedindo comida… (ela adora cenoura!)');
+        fx('florPede');
+        SFX.au(1);
+        UI.dirty = true;
+      }
+    }
+
+    // Paciência (chuva deixa todo mundo mais impaciente; latido da Florzinha também)
+    const patRate = (raining ? 1.25 : 1) * (f.late > 0 ? 1.5 : 1);
     for (const c of [...r.customers]) {
+      if (c.delivery) {   // a "paciência" do delivery é o prazo até o motoboy chegar (e depois a espera dele)
+        c.patience -= dt;
+        if (c.patience > 0) continue;
+        if (!c.moto) {
+          c.moto = true;
+          fx('motoboy', { id: c.id });
+          this.florLate();
+          if (c.state === 'embalado') { this.pickup(c); continue; }
+          c.patience = c.maxPatience = MOTO_ESPERA;
+          UI.alert('🛵', 'O motoboy chegou!', `${c.name} não está pronto: ele espera ${MOTO_ESPERA}s`);
+        } else {
+          r.lost++;
+          r.customers = r.customers.filter(x => x !== c);
+          if (r.selected === c.id) { const next = r.customers.find(x => x.state === 'esperando'); r.selected = next ? next.id : null; }
+          r.log.push(`🛵 O motoboy foi embora sem o ${c.name}`);
+          UI.toast(`🛵 O motoboy desistiu do ${c.name}!`);
+          fx('motoboySai', { id: c.id, ok: false });
+          SFX.bad();
+          UI.dirty = true;
+        }
+        continue;
+      }
       c.patience -= dt * patRate * (c.state === 'chegou' ? 0.8 : 1);
       const ratio = c.patience / c.maxPatience;
       if (ratio < 0.33 && !c.alerted) {
@@ -558,7 +703,8 @@ const G = {
     }
 
     // Fim do dia
-    const done = r.served + r.lost >= r.diff.total && !r.customers.length;
+    // (todo cliente e delivery que chegou já saiu: atendido ou perdido)
+    const done = r.spawned >= r.diff.total && r.deliv.spawned >= r.deliv.total && !r.customers.length;
     if (done || r.lost >= MAX_LOST) this.endDay(r.lost >= MAX_LOST);
   },
 
@@ -587,6 +733,13 @@ const G = {
       r.log.push('💧 A irrigação quebrou de vez! Compre outra na loja');
     }
     if (this.s.faca < 35) r.log.push(`🔪 Faca com ${this.s.faca}% de fio`);
+    // Florzinha gordinha demais vai ao veterinário (e volta de dieta)
+    if (this.s.flor.peso >= FLOR_PESO_VET) {
+      const preco = Math.min(this.s.coins, VET_PRECO);
+      this.s.coins -= preco;
+      this.s.flor.peso = 50;
+      r.log.push(`🐶 Florzinha foi ao veterinário: gordinha demais! (−${preco})`);
+    } else if (this.s.flor.peso >= 60) r.log.push('🐶 A Florzinha está ficando pesada… dê cenoura');
     // Jade feliz encontra uma semente de presente
     r.gift = null;
     if (this.jadeHelping()) {

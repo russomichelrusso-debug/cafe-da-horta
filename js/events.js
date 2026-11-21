@@ -21,7 +21,7 @@ const EVENTS = {
     ok: () => G.run.spawned < G.run.diff.total && !G.run.nextVip,
     start() {
       G.run.nextVip = true;
-      UI.alert('⭐', 'Um crítico gastronômico vem aí!', 'Paga o triplo com nota 90+. Abaixo disso, perde 1 ❤️');
+      UI.alert('⭐', 'Um crítico gastronômico vem aí!', `Paga o triplo com nota ${NOTA_CRITICO(G.s.day)}+. Abaixo disso, perde 1 ❤️`);
       return '⭐ Visita do crítico';
     },
   },

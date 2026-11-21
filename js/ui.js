@@ -7,7 +7,7 @@ const TABS = [
   { id: 'montagem', nome: 'Montagem', em: '🥪' },
   { id: 'horta',    nome: 'Horta',    em: '🌱' },
   { id: 'mercado',  nome: 'Mercado',  em: '🛒' },
-  { id: 'jade',     nome: 'Jade',     em: '🐹' },
+  { id: 'jade',     nome: 'Animais',  em: '🐾' },   // Jade + Florzinha (o id fica 'jade' para o 3D)
 ];
 
 const UI = {
@@ -115,7 +115,7 @@ const UI = {
   shopTab: 'cozinha',
   showShop() {
     const s = G.s, tab = this.shopTab;
-    const tabs = [['cozinha', '🔪 Cozinha'], ['horta', '🌱 Horta'], ['jade', '🐹 Jade']];
+    const tabs = [['cozinha', '🔪 Cozinha'], ['horta', '🌱 Horta'], ['jade', '🐾 Animais']];
     const cards = UPGRADES.filter(u => u.aba === tab).map(u => {
       const n = G.lvl(u.id), max = n >= u.precos.length;
       const p = max ? 0 : u.precos[n];
@@ -184,6 +184,7 @@ const UI = {
       else if (k === 'grow') { const p = s.plots[+a]; v = p.crop ? p.grow / CROPS[p.crop].tempo : 0; }
       else if (k === 'fome') v = s.jade.fome / 100;
       else if (k === 'alegria') v = s.jade.alegria / 100;
+      else if (k === 'peso') { v = s.flor.peso / 100; el.parentNode.classList.toggle('low', s.flor.peso >= 60); }
       else if (k === 'blend') v = r.blend ? r.blend.p : 0;
       el.style.transform = `scaleX(${clamp(v, 0, 1)})`;
     }
@@ -202,11 +203,16 @@ const UI = {
   renderHud() {
     const r = G.run, s = G.s;
     const hearts = '❤️'.repeat(Math.max(0, MAX_LOST - r.lost)) + '🖤'.repeat(Math.min(MAX_LOST, r.lost));
+    const feitos = r.spawned - r.customers.filter(c => !c.delivery).length;   // clientes do balcão que já saíram
+    const f = r.flor;
     this.el.hud.innerHTML = `
       <div class="hud-l"><b>Dia ${s.day}</b>
         <span class="pill">🪙 ${s.coins}</span>
-        <span class="pill">👥 ${r.served + r.lost}/${r.diff.total}</span>
+        <span class="pill">👥 ${feitos}/${r.diff.total}</span>
+        ${r.deliv.total ? `<span class="pill">🛵 ${r.deliv.spawned}/${r.deliv.total}</span>` : ''}
         <span class="pill hearts">${hearts}</span>
+        ${f.late > 0 ? '<button class="pill evt flor-pill" data-act="flor">🐶 Latindo! Toque p/ acalmar</button>' : ''}
+        ${f.pede > 0 ? `<button class="pill evt flor-pill" data-act="florCenoura">🐶 Quer 🥕 · dar (${s.stock.cenoura || 0})</button>` : ''}
         ${r.ev.rush > 0 ? `<span class="pill evt">🏃 Rush <b data-ev="rush">${Math.ceil(r.ev.rush)}</b>s</span>` : ''}
         ${r.ev.chuva > 0 ? `<span class="pill evt">🌧️ <b data-ev="chuva">${Math.ceil(r.ev.chuva)}</b>s</span>` : ''}
         ${r.ev.luz > 0 ? `<span class="pill evt">⚡ Sem luz <b data-ev="luz">${Math.ceil(r.ev.luz)}</b>s</span>` : ''}
@@ -225,7 +231,7 @@ const UI = {
       horta: s.plots.filter(p => p.praga || p.stage === 'pronto' || p.stage === 'passado' || p.stage === 'murcho' || (p.stage === 'growing' && p.water < 25)).length + (s.irrigQuebrada ? 1 : 0),
       preparo: s.faca <= 0 ? 1 : 0,
       montagem: r.pratos !== null && r.pratos <= 0 ? 1 : 0,
-      jade: G.jadeHelping() ? 0 : 1,
+      jade: G.jadeHelping() && !(r.flor.pede > 0 || r.flor.late > 0) ? 0 : 1,
     };
     this.el.tabs.innerHTML = TABS.map(t => `
       <button class="tab ${this.station === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">
@@ -238,10 +244,10 @@ const UI = {
     const list = r.customers.filter(c => c.state === 'esperando');
     this.el.rail.innerHTML = `<div class="rail-h">Comandas</div>` + (list.length ? list.map(c => {
       const rec = RECIPES[c.order.recipe];
-      return `<button class="ticket ${r.selected === c.id ? 'sel' : ''} ${c.vip ? 'vip' : ''}" data-act="select" data-arg="${c.id}">
-        <span class="t-num">${c.vip ? '⭐' : String(c.id).padStart(2, '0')}</span>
+      return `<button class="ticket ${r.selected === c.id ? 'sel' : ''} ${c.vip ? 'vip' : ''} ${c.delivery ? 'delivery' : ''}" data-act="select" data-arg="${c.id}">
+        <span class="t-num">${c.vip ? '⭐' : c.delivery ? '🛵' : String(c.id).padStart(2, '0')}</span>
         ${ic(rec.icon, 't-ic')}
-        <span class="t-txt"><b>${c.name}</b><small>${rec.nome}</small>
+        <span class="t-txt"><b>${c.name}</b><small>${c.delivery ? (c.moto ? '🛵 Motoboy esperando!' : 'Embalar p/ o motoboy') : rec.nome}</small>
           ${c.order.sem ? `<em class="t-sem">🚫 sem ${ING[c.order.sem].nome.toLowerCase()}</em>` : ''}</span>
         <span class="t-paw">${ic('pata')}</span>
         <span class="bar"><i data-bar="pat:${c.id}"></i></span>
@@ -269,8 +275,17 @@ const UI = {
   st_balcao() {
     const r = G.run;
     const worried = r.customers.some(c => c.patience / c.maxPatience < 0.33);
+    const fila = r.customers.filter(c => !c.delivery), entregas = r.customers.filter(c => c.delivery);
     const spots = [];
-    for (let i = 0; i < G.maxSpots(); i++) spots.push(r.customers[i] || r.leaving[i - r.customers.length] && { leaving: r.leaving[i - r.customers.length] });
+    for (let i = 0; i < G.maxSpots(); i++) spots.push(fila[i] || r.leaving[i - fila.length] && { leaving: r.leaving[i - fila.length] });
+    const f = r.flor;
+    const florExpr = f.late > 0 ? 'latindo' : f.pede > 0 ? 'pedindo' : f.feliz > 0 ? 'comendo' : 'feliz';
+    // prateleira de retirada: uma sacola por delivery; o motoboy aparece quando chega
+    const retirada = entregas.length ? `<div class="retirada"><b>🛵 Retirada</b>${entregas.map(c => `
+      <div class="ret ${c.state === 'embalado' ? 'pronto' : ''} ${c.moto ? 'moto' : ''}">
+        ${c.moto ? `<div class="ret-moto">${motoboySVG()}</div>` : ''}
+        <span>${c.state === 'embalado' ? '🛍️ Pronto' : ic(RECIPES[c.order.recipe].icon)} ${c.name.replace('Delivery ', '#')}</span>
+        <span class="bar"><i data-bar="pat:${c.id}"></i></span></div>`).join('')}</div>` : '';
     return `
       <div class="cafe-wall"><div class="sign">Café da Horta</div><div class="window"></div><div class="plant-shelf">${ic('alface')}${ic('morango')}${ic('cenoura')}</div></div>
       <div class="maria-spot">${mariaSVG(worried ? 'preoc' : 'feliz')}</div>
@@ -290,6 +305,10 @@ const UI = {
       }).join('')}</div>
       <div class="counter"></div>
       <div class="jade-counter ${G.jadeHelping() ? '' : 'zzz'}">${jadeSVG(G.jadeHelping() ? 'feliz' : 'sono')}</div>
+      ${retirada}
+      <button class="flor-spot ${florExpr}" data-act="flor" aria-label="Florzinha">${florSVG(florExpr)}
+        ${f.late > 0 ? '<span class="flor-say">AU! AU!</span>' : ''}</button>
+      ${f.pede > 0 ? `<button class="btn sm go flor-dar" data-act="florCenoura" ${(G.s.stock.cenoura || 0) ? '' : 'disabled'}>🥕 Dar cenoura (${G.s.stock.cenoura || 0})</button>` : ''}
       ${r.phase === 'prep' ? `<div class="banner">Preparação: colha, corte e compre antes de abrir as portas!</div>` : ''}`;
   },
 
@@ -437,6 +456,25 @@ const UI = {
         <div class="jfoods">${foods.map(id => `<div class="bin drag ${s.stock[id] ? '' : 'off'}" data-drag="${id}" data-target="jade">
           ${ic(id)}<b>${s.stock[id] || 0}</b><span>${ING[id].nome}</span></div>`).join('')}</div>
         <button class="btn" data-act="pet">🤚 Carinho</button>
+      </div>
+      ${this.florSide()}`;
+  },
+
+  // Coluna da Florzinha na aba Animais: peso, como ela está, comida e carinho
+  florSide() {
+    const s = G.s, f = G.run.flor;
+    const expr = f.late > 0 ? 'latindo' : f.pede > 0 ? 'pedindo' : f.feliz > 0 ? 'comendo' : 'feliz';
+    const status = f.late > 0 ? ['no', '📣 Latindo pro motoboy! Faça carinho para acalmar.']
+      : f.pede > 0 ? ['no', '🥺 Pedindo comida! Se ninguém der, ela rouba do balcão.']
+      : s.flor.peso >= 60 ? ['no', `⚖️ Gordinha demais! Com ${FLOR_PESO_VET}% vai ao veterinário (🪙 ${VET_PRECO}).`]
+      : ['ok', '😊 Tranquila. Cenoura é o petisco mais saudável.'];
+    return `<div class="flor-side">
+        <div class="flor-h"><div class="flor-mini">${florSVG(expr)}</div><b>Florzinha</b></div>
+        <div class="jbar"><span>⚖️ Peso</span><div class="pbar peso"><i data-bar="peso"></i></div></div>
+        <p class="jstatus ${status[0]}">${status[1]}</p>
+        <div class="flor-foods">${Object.keys(FLOR_FOOD).map(id => `<button class="bin" data-act="florFood" data-arg="${id}" ${s.stock[id] ? '' : 'disabled'}>
+          ${ic(id)}<b>${s.stock[id] || 0}</b><span>${ING[id].nome}${FLOR_FOOD[id].peso > 0 ? ' ⚠️' : ''}</span></button>`).join('')}</div>
+        <button class="btn" data-act="flor">🤚 Carinho</button>
       </div>`;
   },
 
@@ -611,6 +649,9 @@ const ACTIONS = {
   pest(i) { G.removePest(+i); },
   fix() { G.fixIrrigation(); },
   catchjade() { EV.catchJade(); },
+  flor() { G.calmFlor(); },
+  florCenoura() { G.feedFlor('cenoura'); },
+  florFood(id) { G.feedFlor(id); },
 };
 
 // ===== Loop principal =====

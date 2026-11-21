@@ -124,6 +124,13 @@ const SFX = {
   squeak() { this.wheek(2); },
   harvest(){ this.tone(523, 0.08, 'triangle', 0.1); this.tone(784, 0.12, 'triangle', 0.1, 0, 0.07); },
   water()  { this.tone(300, 0.2, 'sine', 0.08, 300); },
+  au(n = 2, delay = 0) {   // latido da Florzinha
+    for (let i = 0; i < n; i++) {
+      this.tone(420, 0.09, 'sawtooth', 0.1, -180, delay + i * 0.2);
+      this.tone(840, 0.05, 'square', 0.04, -320, delay + i * 0.2);
+    }
+  },
+  plim()   { this.tone(1568, 0.12, 'sine', 0.1); this.tone(2093, 0.22, 'sine', 0.08, 0, 0.1); },   // pedido de delivery no app
   alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },
   blendTick(){ this.tone(90 + Math.random() * 30, 0.05, 'sawtooth', 0.03); },
 };

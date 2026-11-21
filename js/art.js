@@ -134,6 +134,69 @@ function jadeSVG(expr = 'feliz', acc = (typeof G !== 'undefined' && G.s) ? G.s.a
 </svg>`;
 }
 
+// ----- Florzinha: cachorrinha branca e gordinha, coleira rosa com florzinha (opção A dos mockups) -----
+// expr: 'feliz' | 'pedindo' | 'latindo' | 'comendo' | 'sono'
+function florSVG(expr = 'feliz') {
+  const C = '#fbf5e6', SOMBRA = '#ece0c6', CLARO = '#fffdf7', OLHO = '#1d120b';
+  const olhos = {
+    feliz:   `<circle cx="78" cy="74" r="8.5" fill="${OLHO}"/><circle cx="81" cy="70.5" r="2.8" fill="#fff"/>
+              <circle cx="122" cy="74" r="8.5" fill="${OLHO}"/><circle cx="125" cy="70.5" r="2.8" fill="#fff"/>`,
+    pedindo: `<circle cx="78" cy="75" r="11" fill="${OLHO}"/><circle cx="82" cy="70" r="3.6" fill="#fff"/><circle cx="74" cy="79" r="1.8" fill="#fff"/>
+              <circle cx="122" cy="75" r="11" fill="${OLHO}"/><circle cx="126" cy="70" r="3.6" fill="#fff"/><circle cx="118" cy="79" r="1.8" fill="#fff"/>
+              <path d="M66 60L88 54M112 54L134 60" stroke="#c4b48f" stroke-width="3.5" stroke-linecap="round"/>`,
+    latindo: `<circle cx="78" cy="74" r="8" fill="${OLHO}"/><circle cx="81" cy="71" r="2.5" fill="#fff"/>
+              <circle cx="122" cy="74" r="8" fill="${OLHO}"/><circle cx="125" cy="71" r="2.5" fill="#fff"/>
+              <path d="M66 58L88 65M112 65L134 58" stroke="#b09e78" stroke-width="4" stroke-linecap="round"/>`,
+    comendo: `<path d="M69 76Q78 66 87 76M113 76Q122 66 131 76" stroke="${OLHO}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    sono:    `<path d="M69 74Q78 82 87 74M113 74Q122 82 131 74" stroke="${OLHO}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+  }[expr];
+  const boca = {
+    feliz:   `<path d="M100 101L100 105M100 105Q94 111 88 106M100 105Q106 111 112 106" stroke="#5a3b2a" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+    pedindo: `<path d="M95 106Q100 121 105 106Z" fill="#f07c8a"/>
+              <path d="M100 101L100 105M100 105Q94 110 89 106M100 105Q106 110 111 106" stroke="#5a3b2a" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+    latindo: `<path d="M86 104Q100 128 114 104Q100 108 86 104Z" fill="#6b2a2a"/><path d="M93 115Q100 124 107 115Q100 112 93 115Z" fill="#f07c8a"/>`,
+    comendo: `<g transform="translate(74 118) rotate(-60) scale(.6)">${ICONS.cenoura}</g>`,
+    sono:    `<path d="M93 105Q100 109 107 105" stroke="#5a3b2a" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+  }[expr];
+  return `<svg class="flor ${expr}" viewBox="0 0 200 212">
+    <ellipse cx="100" cy="204" rx="72" ry="7" fill="#000" opacity=".12"/>
+    <path class="f-rabo" d="M150 150C170 140 182 124 178 112C190 118 192 140 176 156C168 164 156 164 150 160Z" fill="${SOMBRA}"/>
+    <path d="M38 200C22 168 28 124 62 106L138 106C172 124 178 168 162 200Z" fill="${C}"/>
+    <ellipse cx="76" cy="198" rx="19" ry="10" fill="${CLARO}"/><ellipse cx="124" cy="198" rx="19" ry="10" fill="${CLARO}"/>
+    <path d="M52 46C28 50 20 84 28 112C32 124 48 122 52 108C56 90 60 70 62 54Z" fill="${SOMBRA}"/>
+    <path d="M148 46C172 50 180 84 172 112C168 124 152 122 148 108C144 90 140 70 138 54Z" fill="${SOMBRA}"/>
+    <ellipse cx="100" cy="76" rx="54" ry="48" fill="${C}"/>
+    <g fill="${C}"><circle cx="70" cy="36" r="13"/><circle cx="86" cy="28" r="14"/><circle cx="102" cy="25" r="14"/><circle cx="118" cy="29" r="13"/><circle cx="132" cy="37" r="12"/></g>
+    <ellipse cx="100" cy="165" rx="34" ry="28" fill="${CLARO}"/>
+    <path d="M70 198L70 192M82 198L82 192M118 198L118 192M130 198L130 192" stroke="#ddd0b4" stroke-width="2" stroke-linecap="round"/>
+    <g class="f-cab">
+      <ellipse cx="100" cy="98" rx="27" ry="19" fill="${CLARO}"/>
+      <g fill="${CLARO}"><circle cx="82" cy="110" r="7"/><circle cx="93" cy="115" r="7"/><circle cx="107" cy="115" r="7"/><circle cx="118" cy="110" r="7"/></g>
+      ${olhos}
+      <ellipse cx="62" cy="94" rx="8" ry="4.5" fill="#f3a1a0" opacity=".6"/><ellipse cx="138" cy="94" rx="8" ry="4.5" fill="#f3a1a0" opacity=".6"/>
+      <path d="M91 90Q100 84 109 90Q107 99 100 100Q93 99 91 90Z" fill="${OLHO}"/><ellipse cx="96" cy="89" rx="3" ry="1.6" fill="#fff" opacity=".7"/>
+      ${boca}
+    </g>
+    <path d="M62 124Q100 142 138 124" stroke="#ff6fa5" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <g transform="translate(100 138)"><g fill="#ffd34d"><circle cy="-7" r="5"/><circle cx="6.7" cy="-2.2" r="5"/><circle cx="4.1" cy="5.7" r="5"/><circle cx="-4.1" cy="5.7" r="5"/><circle cx="-6.7" cy="-2.2" r="5"/></g><circle r="4" fill="#f28a1c"/></g>
+  </svg>`;
+}
+
+// ----- Motoboy do delivery: capacete vermelho, jaqueta escura e baú de entrega -----
+function motoboySVG() {
+  return `<svg class="cust moto" viewBox="0 0 100 130">
+    <rect x="60" y="74" width="38" height="36" rx="5" fill="#e5412f"/><rect x="60" y="74" width="38" height="9" rx="4" fill="#b92e20"/>
+    <path d="M14 130C14 96 30 84 50 84C70 84 86 96 86 130Z" fill="#2c3440"/>
+    <path d="M18 114L82 114" stroke="#f6c93b" stroke-width="5"/>
+    <rect x="43" y="72" width="14" height="16" rx="5" fill="#c98d62"/>
+    <ellipse cx="50" cy="54" rx="28" ry="28" fill="#c98d62"/>
+    <path d="M18 56C14 18 86 18 82 56L82 60L18 60Z" fill="#e5412f"/>
+    <path d="M24 46Q50 36 76 46L74 58L26 58Z" fill="#9fd3f0"/><path d="M30 46Q40 42 48 42" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+    <circle cx="40" cy="66" r="3.5" fill="#1d120b"/><circle cx="60" cy="66" r="3.5" fill="#1d120b"/>
+    <path d="M43 74Q50 77 57 74" stroke="#7a3a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </svg>`;
+}
+
 // ----- Clientes: avatar simples gerado -----
 const SKINS = ['#f6d2b8', '#e8b48f', '#c98d62', '#8d5a3b', '#f1c9a5'];
 const HAIRS = ['#2b1a10', '#5b3a25', '#a0612f', '#e2b55a', '#1b1b1b', '#7d4a8f'];

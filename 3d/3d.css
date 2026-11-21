@@ -28,6 +28,7 @@ html, body { background: #bfe6ff; }
 /* Jade: a Jade 3D fica no lugar da 2D (a área continua sendo o alvo de soltar comida) */
 .jade-home .hay, .jade-big svg { display: none; }
 .jade-side { background: rgba(255, 240, 245, .92); border-radius: 16px 0 0 16px; padding-left: 12px !important; }
+.flor-side { background: rgba(255, 248, 235, .92); padding-left: 12px !important; }
 
 /* Horta: canteiros viram etiquetas sobre a horta 3D */
 .garden { display: none; }
