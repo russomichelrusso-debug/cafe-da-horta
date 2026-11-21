@@ -210,6 +210,38 @@ def torno(nome, perfil, cor, pivo=(0, 0, 0), pai=None, seg=56, a0=0.0, a1=2 * ma
     return ob
 
 
+def pintar(ob, cor_em, rug=0.85):
+    """Pinta cada vértice com cor_em(posição de mundo) -> RGBA linear (manchas sem costura).
+    O material passa a usar essa pintura; o glTF leva como COLOR_0 e o three.js multiplica pela cor."""
+    me = ob.data
+    att = me.color_attributes.new('Pintura', 'FLOAT_COLOR', 'POINT')
+    base = mundo(ob)
+    for i, v in enumerate(me.vertices):
+        att.data[i].color = cor_em(v.co + base)
+    m = bpy.data.materials.new(ob.name + '_pintura')
+    try:
+        m.use_nodes = True
+    except Exception:
+        pass
+    nt = m.node_tree
+    bsdf = nt.nodes.get('Principled BSDF')
+    bsdf.inputs['Roughness'].default_value = rug
+    vc = nt.nodes.new('ShaderNodeVertexColor')
+    vc.layer_name = 'Pintura'
+    nt.links.new(vc.outputs['Color'], bsdf.inputs['Base Color'])
+    me.materials.clear()
+    me.materials.append(m)
+
+
+def mistura(a, b, t):
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(4))
+
+
+def suave(a, b, x):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
 def ponto(nome, pos, pai=None):
     """Nó vazio (sem malha): marca um lugar que o jogo usa, como o bico do regador."""
     ob = bpy.data.objects.new(nome, None)
