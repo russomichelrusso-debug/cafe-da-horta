@@ -212,35 +212,33 @@ const custs = new Map();   // id -> { g, mouth, key }
 const leavers = [];
 const PANTS = ['#2f3b5c', '#4a3a2a', '#3b3b3b', '#5a6b7f', '#6b4a6b'];
 
+// Modelo do Blender (blender/clientes.py): um corpo com os 4 penteados e o chapéu do crítico.
+// Cada cliente ganha uma cópia (a malha é compartilhada) pintada com as cores sorteadas dele.
+let clienteModelo = null;
+const esperandoModelo = [];   // clientes que chegaram antes do arquivo carregar
+new GLTFLoader().load('modelos/cliente.glb', gltf => {
+  clienteModelo = gltf.scene;
+  esperandoModelo.splice(0).forEach(vestir => vestir());
+}, undefined, e => console.error('[3D] os clientes não carregaram:', e));
+
 function buildCustomer(c) {
   const L = c.look;
-  const g = group(ENTRY.x, 0, ENTRY.z);
-  const o = { p: g };
-  const pants = PANTS[c.id % PANTS.length];
-  for (const sx of [-1, 1]) {
-    mesh(cyl(0.075, 0.07, 0.55, 10), pants, sx * 0.11, 0.3, 0, o);
-    ol(mesh(sph(0.08, 10, 8), '#3a2a22', sx * 0.11, 0.04, 0.05, { ...o, s: [1, 0.6, 1.4] }));
-  }
-  ol(mesh(lathe([[0.001, 0.55], [0.26, 0.55], [0.3, 0.75], [0.3, 1.05], [0.24, 1.25], [0.12, 1.31], [0.001, 1.31]], 18), L.shirt, 0, 0, 0, o));
-  for (const sx of [-1, 1]) {
-    mesh(cap(0.07, 0.42), L.shirt, sx * 0.34, 0.95, 0, { ...o, r: [0, 0, sx * 0.15] });
-    mesh(sph(0.07, 10, 8), L.skin, sx * 0.38, 0.66, 0.01, o);
-  }
-  mesh(cyl(0.07, 0.08, 0.14, 10), L.skin, 0, 1.34, 0, o);
-  ol(mesh(sph(0.27, 22, 16), L.skin, 0, 1.6, 0, o));
-  const hairTop = () => ol(mesh(half(0.285, 20, 10, 0.55), L.hair, 0, 1.62, -0.02, { ...o, r: [-0.35, 0, 0] }));
-  if (L.style === 0) { hairTop(); mesh(sph(0.26, 16, 10), L.hair, 0, 1.6, -0.07, { ...o, s: [1.03, 1, 0.9] }); }
-  if (L.style === 1) { hairTop(); ol(mesh(cap(0.24, 0.42), L.hair, 0, 1.38, -0.14, { ...o, s: [1.15, 1, 0.6] })); }
-  if (L.style === 2) { hairTop(); ol(mesh(sph(0.13, 12, 8), L.hair, 0, 1.94, -0.1, o)); mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 12), '#e35d8a', 0, 1.87, -0.07, { ...o, r: [Math.PI / 2 + 0.4, 0, 0] }); }
-  if (L.style === 3) for (const [x, y, z] of [[-0.2, 1.78, 0], [0.2, 1.78, 0], [0, 1.88, -0.03], [-0.13, 1.82, -0.17], [0.13, 1.82, -0.17], [0, 1.72, -0.24]]) ol(mesh(sph(0.14, 12, 8), L.hair, x, y, z, o));
-  for (const sx of [-1, 1]) {
-    mesh(sph(0.036, 10, 8), '#1d120b', sx * 0.1, 1.63, 0.245, { ...o, s: [1, 1.2, 0.6], cast: false });
-    mesh(sph(0.012, 6, 4), '#ffffff', sx * 0.1 + 0.01, 1.645, 0.262, { ...o, cast: false });
-    mesh(sph(0.04, 8, 6), '#f3a1a0', sx * 0.16, 1.54, 0.21, { ...o, s: [1.3, 0.6, 0.3], cast: false });
-  }
-  const mouth = mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 14, Math.PI), '#7a3a2a', 0, 1.5, 0.255, { ...o, r: [0, 0, Math.PI], cast: false });
-  if (c.vip) { ol(mesh(cyl(0.2, 0.24, 0.07, 16), '#f2b33d', 0, 1.9, -0.02, o)); mesh(sph(0.05), '#f2b33d', 0, 1.96, -0.02, o); }
-  return { g, mouth };
+  const e = { g: group(ENTRY.x, 0, ENTRY.z), mouth: new THREE.Object3D() };
+  const vestir = () => {
+    const cores = { pele: own(L.skin), camisa: own(L.shirt), calca: own(PANTS[c.id % PANTS.length]), cabelo: own(L.hair) };
+    const m = clienteModelo.clone(true);
+    m.traverse(o => {
+      if (o.name.startsWith('cliente_cabelo_estilo')) o.visible = o.name === 'cliente_cabelo_estilo' + L.style;
+      if (o.name === 'cliente_coroa') o.visible = !!c.vip;
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      for (const k in cores) if (o.name.includes('_' + k)) o.material = cores[k];
+    });
+    e.mouth = m.getObjectByName('cliente_boca');
+    e.g.add(m);
+  };
+  if (clienteModelo) vestir(); else esperandoModelo.push(vestir);
+  return e;
 }
 
 function syncCustomers(dt, t) {
@@ -257,7 +255,7 @@ function syncCustomers(dt, t) {
     else e.g.position.y = 0;
     e.g.rotation.y = dist > 0.3 ? Math.atan2(target.x - e.g.position.x, target.z - e.g.position.z) : Math.PI - 0.35;
     const angry = c.patience / c.maxPatience < 0.33;
-    e.mouth.rotation.z = angry ? 0 : Math.PI;
+    e.mouth.rotation.z = angry ? Math.PI : 0;   // o modelo vem sorrindo (∪); bravo vira ∩
     e.mouth.position.y = angry ? 1.47 : 1.5;
   });
   for (const [id, e] of custs) {
