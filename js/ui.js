@@ -128,6 +128,9 @@ const UI = {
               : `<button class="btn go" data-act="upgrade" data-arg="${u.id}" ${s.coins < p ? 'disabled' : ''}>🪙 ${p}</button>`}
       </div>`;
     }).join('');
+    // miniatura da Florzinha no espaço que sobra ao lado das melhorias dela
+    const flor = tab !== 'jade' ? '' : `<div class="up-card flor-shop"><div class="flor-shop-art">${florSVG('feliz')}</div>
+      <div class="up-txt"><b>Florzinha</b><small>⚖️ Peso ${Math.round(s.flor.peso)}%${s.flor.peso >= 60 ? ' · gordinha!' : ''}</small></div></div>`;
     const accs = tab !== 'jade' ? '' : `<div class="acc-row">
       <div class="acc-jade">${jadeSVG('feliz')}</div>
       ${ACESSORIOS.map(a => {
@@ -142,7 +145,7 @@ const UI = {
           <button class="btn" data-act="shopback">← Voltar</button></div>
         <div class="shop-tabs">${tabs.map(([id, nome]) =>
           `<button class="tab ${tab === id ? 'on' : ''}" data-act="shoptab" data-arg="${id}">${nome}</button>`).join('')}</div>
-        <div class="up-grid">${cards}</div>${accs}
+        <div class="up-grid">${cards}${flor}</div>${accs}
       </div>`;
   },
 
