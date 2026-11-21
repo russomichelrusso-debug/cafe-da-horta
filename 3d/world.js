@@ -83,56 +83,34 @@ sun.shadow.normalBias = 0.03;
 scene.add(sun);
 
 // ================= CENÁRIO =================
-mesh(box(13, 0.2, 10), '#e7cfa6', -1.5, -0.1, 0, { recv: true, cast: false });
-for (let i = 0; i < 6; i++) mesh(box(0.04, 0.01, 10), '#d8bb8c', -7.5 + i * 2.2, 0.005, 0, { cast: false });
-mesh(box(12.5, 4.6, 0.25), '#f7e6c8', -1.75, 2.3, -3, { recv: true });
-mesh(box(12.5, 0.6, 0.32), '#c98a4b', -1.75, 0.3, -2.95, { recv: true });
-mesh(box(0.25, 4.6, 10), '#f3dfbd', -8.1, 2.3, 2, { recv: true });
-mesh(box(2.2, 1.5, 0.1), '#ffffff', 2.6, 2.6, -2.85);
-mesh(box(1.9, 1.2, 0.12), '#d6f1ff', 2.6, 2.6, -2.82, { cast: false });
+// Paredes, chão, balcão, cozinha e horta vêm do Blender (blender/cenario.py), nas mesmas posições.
+// Aqui ficam só as peças que mudam durante o jogo.
+new GLTFLoader().load('modelos/cenario.glb', gltf => {
+  gltf.scene.traverse(o => {
+    if (!o.isMesh) return;
+    o.receiveShadow = true;
+    o.castShadow = !/^(chao_|horta_grama|parede_|grama_)/.test(o.name);   // chão e paredes só recebem sombra
+  });
+  scene.add(gltf.scene);
+}, undefined, e => console.error('[3D] o cenário não carregou:', e));
 const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.75), new THREE.MeshBasicMaterial({ map: textTexture('Café da Horta', '#2f6b3a', '#fff'), transparent: true }));
 sign.position.set(-0.6, 3.7, -2.85); scene.add(sign);
-mesh(box(2.2, 0.1, 0.45), '#9a6331', -3.6, 2.5, -2.72);
-[['#5fb548', -4.3], ['#e3304a', -3.6], ['#f28a1c', -2.9]].forEach(([c, x]) => {
-  mesh(cyl(0.16, 0.12, 0.25), '#c96a3a', x, 2.68, -2.7);
-  mesh(sph(0.17), c, x, 2.92, -2.7, { s: [1, 0.8, 1] });
-});
-// balcão
-mesh(box(5.6, 1.1, 1.1), '#c98a4b', 0.3, 0.55, 0, { recv: true });
-mesh(box(5.8, 0.12, 1.3), '#8a5a30', 0.3, 1.16, 0, { recv: true });
-for (let i = 0; i < 6; i++) mesh(box(0.05, 0.9, 0.02), '#b57a3f', -2.2 + i, 0.5, 0.56, { cast: false });
 const TOP = 1.22;
-mesh(new THREE.SphereGeometry(0.13, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2), '#f2c14e', 2.7, TOP, 0.3);
 // pilha de louça suja (evento)
 const dirty = group(-1.15, TOP, -0.25);
 for (let i = 0; i < 5; i++) mesh(cyl(0.2, 0.17, 0.035), '#c9c3b5', 0, 0.02 + i * 0.04, 0, { p: dirty });
 dirty.visible = false;
 
-// cozinha
+// cozinha: faca e tábua (o legume em cima muda)
 const kx = -5.4;
-mesh(box(2.4, 1, 1.4), '#c98a4b', kx, 0.5, 0, { recv: true });
-mesh(box(2.5, 0.08, 1.5), '#e9eef1', kx, 1.03, 0, { recv: true });
-mesh(box(1.1, 0.06, 0.7), '#d9a66b', kx, 1.1, 0.1, { recv: true });
 const BOARD_Y = 1.13;
-mesh(box(1.1, 2.3, 0.8), '#eef5f8', kx - 1.8, 1.15, -2.3, { recv: true });
-mesh(box(0.05, 0.6, 0.05), '#9fb3bf', kx - 1.35, 1.5, -1.88);
-mesh(box(1.6, 0.9, 0.8), '#d1495b', kx + 1.2, 0.45, -2.4);
-mesh(box(1.6, 0.06, 0.8), '#3b3b3b', kx + 1.2, 0.93, -2.4);
-mesh(cyl(0.22, 0.2, 0.25), '#b8c3cc', kx + 0.9, 1.08, -2.4);
 const knife = group(kx + 0.32, BOARD_Y + 0.02, 0.38);
 knife.rotation.y = 0.4;
 mesh(box(0.5, 0.02, 0.09), '#d8dde2', 0, 0, 0, { p: knife });
 mesh(box(0.22, 0.05, 0.07), '#2fa37a', 0.35, 0, 0, { p: knife });
 const onBoard = group(kx - 0.1, BOARD_Y, 0.1);
 
-// horta
-mesh(box(10, 0.2, 12), '#8bcf6a', 10, -0.12, 0, { recv: true, cast: false });
-for (let i = 0; i < 8; i++) mesh(box(0.12, 0.8, 0.12), '#fffaf3', 5.4 + i * 1.3, 0.4, -3.2);
-mesh(box(9.2, 0.08, 0.06), '#fffaf3', 9.95, 0.6, -3.2);
-for (const [x, z, s] of [[12.5, -5, 1.2], [6.5, -6, 1], [14.5, -2, 0.9]]) {
-  mesh(cyl(0.15, 0.2, 1.4), '#8a5a30', x, 0.7, z);
-  mesh(sph(0.9 * s), '#5aa845', x, 1.9 * s, z);
-}
+// horta: poça do vazamento da irrigação
 const puddle = mesh(cyl(0.9, 0.9, 0.02, 24), '#6fb8ee', 7.9, 0.02, 2.4, { cast: false, s: [1.4, 1, 0.8] });
 puddle.visible = false;
 
