@@ -7,7 +7,7 @@ const TABS = [
   { id: 'montagem', nome: 'Montagem', em: '🥪' },
   { id: 'horta',    nome: 'Horta',    em: '🌱' },
   { id: 'mercado',  nome: 'Mercado',  em: '🛒' },
-  { id: 'jade',     nome: 'Animais',  em: '🐾' },   // Jade + Florzinha (o id fica 'jade' para o 3D)
+  { id: 'jade',     nome: 'Animais',  em: '🐹🐶' },   // Jade + Florzinha (o id fica 'jade' para o 3D)
 ];
 
 const UI = {
@@ -59,8 +59,11 @@ const UI = {
     const w = this.el.wrap.clientWidth, h = this.el.wrap.clientHeight;
     this.scale = Math.min(w / 960, h / 440);
     const sw = Math.min(1320, Math.max(960, w / this.scale));
-    const x = (w - sw * this.scale) / 2, y = (h - 440 * this.scale) / 2;
+    // tela mais "alta" que o palco (iPhone deitado sem o notch ≈ 2,0): estica a altura em vez de sobrar faixa
+    const sh = Math.max(440, Math.min(520, h / this.scale));
+    const x = (w - sw * this.scale) / 2, y = (h - sh * this.scale) / 2;
     this.el.stage.style.width = sw + 'px';
+    this.el.stage.style.height = sh + 'px';
     this.el.stage.style.transform = `translate(${x}px,${y}px) scale(${this.scale})`;
   },
 
@@ -532,7 +535,7 @@ const UI = {
     t.className = 'toast';
     t.textContent = msg;
     this.el.toasts.appendChild(t);
-    while (this.el.toasts.children.length > 3) this.el.toasts.firstChild.remove();
+    while (this.el.toasts.children.length > 2) this.el.toasts.firstChild.remove();   // no máximo 2 por vez
     setTimeout(() => t.remove(), 2600);
   },
   jadeSay(msg, expr) {
