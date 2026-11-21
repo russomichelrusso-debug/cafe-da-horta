@@ -1,11 +1,15 @@
 // ===== Café da Horta 3D — mundo 3D ligado à mesma lógica do jogo 2D =====
 // A lógica (G, EV) e a interface HTML (UI) são as mesmas da versão 2D.
 // Este arquivo só desenha o estado do jogo em 3D e troca algumas telas por etiquetas.
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ---------- Renderizador atrás da área da estação ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;   // visual realista: luz e cor como numa foto
+renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.id = 'world';
@@ -29,12 +33,13 @@ function place() {
 const fit0 = UI.fit.bind(UI);
 UI.fit = function () { fit0(); place(); };
 
-// ---------- Materiais toon ----------
-const grad = new THREE.DataTexture(new Uint8Array([120, 195, 255]), 3, 1, THREE.RedFormat);
-grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+// ---------- Materiais realistas (PBR) ----------
+// Luz ambiente de "estúdio": dá reflexos suaves e sombra de contato em tudo
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const PBR = o => new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, ...o });
 const mats = {};
-const M = c => mats[c] || (mats[c] = new THREE.MeshToonMaterial({ color: c, gradientMap: grad }));
-const own = c => new THREE.MeshToonMaterial({ color: c, gradientMap: grad }); // material próprio (cor muda)
+const M = c => mats[c] || (mats[c] = PBR({ color: c }));
+const own = c => PBR({ color: c }); // material próprio (cor muda)
 const sph = (r, w = 20, h = 14) => new THREE.SphereGeometry(r, w, h);
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 20) => new THREE.CylinderGeometry(rt, rb, h, s);
@@ -66,9 +71,10 @@ function textTexture(text, bg, fg, w = 512, h = 128, size = 64) {
 }
 
 // ---------- Luzes ----------
-const hemi = new THREE.HemisphereLight('#ffffff', '#c9a37a', 1.7);
+const HEMI0 = 0.5, SUN0 = 2.6;   // o ambiente (environment) já ilumina; o sol dá a sombra
+const hemi = new THREE.HemisphereLight('#ffffff', '#c9a37a', HEMI0);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight('#fff3df', 2.4);
+const sun = new THREE.DirectionalLight('#fff3df', SUN0);
 sun.position.set(5, 10, 7);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -133,13 +139,9 @@ puddle.visible = false;
 // ================= CONTORNO DE DESENHO (casca invertida) =================
 // Uma cópia da malha, empurrada para fora pela normal e desenhada só por dentro:
 // vira uma linha escura em volta do personagem, como em desenho animado.
-const outlineMat = new THREE.ShaderMaterial({
-  uniforms: { thick: { value: 0.014 }, color: { value: new THREE.Color('#3b2418') } },
-  vertexShader: 'uniform float thick; void main(){ vec3 p = position + normalize(normal) * thick; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
-  fragmentShader: 'uniform vec3 color; void main(){ gl_FragColor = vec4(color, 1.0); }',
-  side: THREE.BackSide,
-});
-function ol(m) { const o = new THREE.Mesh(m.geometry, outlineMat); o.castShadow = false; m.add(o); return m; }
+// Visual realista (escolhido em 2026-11): sem contorno. ol() ficou para não mexer em todas as chamadas;
+// quando cada personagem virar modelo do Blender, as chamadas somem junto.
+const ol = m => m;
 const lathe = (pts, seg = 24, ps = 0, pl = Math.PI * 2) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg, ps, pl);
 const half = (r, w = 24, h = 12, f = 0.55) => new THREE.SphereGeometry(r, w, h, 0, Math.PI * 2, 0, Math.PI * f);
 
@@ -147,91 +149,23 @@ const half = (r, w = 24, h = 12, f = 0.55) => new THREE.SphereGeometry(r, w, h, 
 const mariaRoot = group(-1.0, 0, -1.3);    // anda pelo cenário
 mariaRoot.rotation.y = 0.35;
 const maria = group(0, 0, 0, mariaRoot);    // balança/abaixa
-const P = { p: maria };
-const SKIN = '#f6d2b8', SKIN2 = '#efc3a4', VINHO = '#8c2738', HAIR = '#5b3a25', HAIR2 = '#4a2e1c', HAIRL = '#7a4e30';
-// pernas (giram ao andar) com sapatinhos boneca
-const legs = [-1, 1].map(sx => {
-  const g = group(sx * 0.13, 0.6, 0, maria);
-  mesh(cyl(0.065, 0.06, 0.5, 12), SKIN2, 0, -0.27, 0, { p: g });
-  ol(mesh(sph(0.09, 14, 10), '#7a2c2c', 0, -0.53, 0.05, { p: g, s: [0.95, 0.6, 1.45] }));
-  mesh(box(0.13, 0.015, 0.02), '#5a1e1e', 0, -0.49, 0.03, { p: g, cast: false });
-  return g;
-});
-// vestido vinho de saia rodada
-ol(mesh(lathe([[0.001, 0.55], [0.58, 0.55], [0.6, 0.6], [0.5, 0.85], [0.38, 1.15], [0.27, 1.33], [0.25, 1.4], [0.28, 1.58], [0.25, 1.74], [0.14, 1.8], [0.001, 1.8]], 28), VINHO, 0, 0, 0, P));
-mesh(new THREE.TorusGeometry(0.585, 0.025, 6, 32), '#a8384b', 0, 0.58, 0, { ...P, r: [Math.PI / 2, 0, 0], cast: false });   // barra
-mesh(new THREE.TorusGeometry(0.262, 0.035, 8, 24), '#6e1c2b', 0, 1.36, 0, { ...P, r: [Math.PI / 2, 0, 0] });          // faixa
-// avental branco que acompanha a curva da saia
-const apronMat = new THREE.MeshToonMaterial({ color: '#fffaf3', gradientMap: grad, side: THREE.DoubleSide });
-mesh(lathe([[0.615, 0.63], [0.525, 0.85], [0.405, 1.15], [0.295, 1.34]], 14, -0.75, 1.5), apronMat, 0, 0, 0, P);
-mesh(box(0.3, 0.3, 0.03), '#fffaf3', 0, 1.53, 0.265, { ...P, r: [-0.1, 0, 0] });
-for (const sx of [-1, 1]) mesh(box(0.05, 0.36, 0.03), '#fffaf3', sx * 0.12, 1.72, 0.12, { ...P, r: [0.95, 0, 0] });
-mesh(box(0.2, 0.14, 0.02), '#f1e4d6', 0, 0.97, 0.47, { ...P, r: [-0.38, 0, 0] });                                     // bolso
-mesh(sph(0.045, 10, 8), '#e35d6a', -0.025, 1.56, 0.285, { ...P, s: [1, 0.9, 0.4], cast: false });                    // coraçãozinho
-mesh(sph(0.045, 10, 8), '#e35d6a', 0.025, 1.56, 0.285, { ...P, s: [1, 0.9, 0.4], cast: false });
-mesh(cone(0.045, 0.06), '#e35d6a', 0, 1.525, 0.285, { ...P, r: [Math.PI, 0, 0], cast: false });
-// braços com mangas bufantes e mãos
-const armL = group(-0.3, 1.7, 0, maria), armR = group(0.3, 1.7, 0, maria);
-for (const a of [armL, armR]) {
-  ol(mesh(sph(0.115, 14, 10), VINHO, 0, -0.03, 0, { p: a, s: [1, 0.9, 1] }));
-  mesh(cap(0.062, 0.42), SKIN2, 0, -0.32, 0, { p: a });
-  ol(mesh(sph(0.075, 12, 10), SKIN, 0, -0.62, 0.01, { p: a }));
-}
-armL.rotation.z = -0.22; armR.rotation.z = 0.22;
-// regador na mão (aparece quando ela está na horta)
-const mCan = group(0, -0.7, 0.05, armR);
-ol(mesh(cyl(0.12, 0.14, 0.22, 16), '#4aa3df', 0, -0.08, 0, { p: mCan }));
-mesh(cyl(0.02, 0.025, 0.32, 8), '#4aa3df', 0, -0.02, 0.17, { p: mCan, r: [1.0, 0, 0] });
-mesh(new THREE.TorusGeometry(0.08, 0.015, 6, 14, Math.PI), '#2f7fb5', 0, 0.04, -0.02, { p: mCan, r: [0, Math.PI / 2, 0] });
-const spout = group(0, 0.08, 0.32, mCan);
-mCan.visible = false;
-mesh(cyl(0.085, 0.1, 0.2, 12), SKIN2, 0, 1.84, 0, P);                                                                 // pescoço
-mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 18), '#fffaf3', 0, 1.78, 0.01, { ...P, r: [Math.PI / 2 - 0.15, 0, 0] });  // golinha
-// cabeça
-const head = group(0, 2.22, 0, maria);
-const H = { p: head };
-ol(mesh(sph(0.42, 32, 24), SKIN, 0, 0, 0, { ...H, s: [1, 0.97, 0.95] }));
-// cabelo castanho ondulado: topo, volume, mechas onduladas e franja de lado
-ol(mesh(half(0.455, 32, 16, 0.55), HAIR, 0, 0.02, -0.02, { ...H, r: [-0.42, 0, 0] }));
-ol(mesh(sph(0.44, 24, 16), HAIR, 0, -0.06, -0.13, { ...H, s: [1.06, 1.05, 0.88] }));
-ol(mesh(cap(0.36, 0.5), HAIR, 0, -0.48, -0.22, { ...H, s: [1.18, 1, 0.55] }));
-for (let k = 0; k < 7; k++) {
-  const a = -1.9 + k * (3.8 / 6), x = Math.sin(a) * 0.4, z = -Math.cos(a) * 0.3 - 0.05;
-  const col = k % 2 ? HAIR : HAIR2;
-  mesh(cap(0.095, 0.42), col, x, -0.5, z, { ...H, r: [0.08, 0, -Math.sin(a) * 0.15] });
-  mesh(sph(0.105, 12, 8), col, x * 1.08, -0.78, z - 0.02, H);                                                      // onda
-  mesh(sph(0.09, 12, 8), col, x * 0.96, -0.95, z + 0.03, H);                                                       // cachinho da ponta
-}
-for (const sx of [-1, 1]) {   // mechas da frente, sobre os ombros
-  ol(mesh(cap(0.1, 0.55), HAIR, sx * 0.39, -0.4, 0.1, { ...H, r: [0, 0, sx * 0.06] }));
-  mesh(sph(0.105, 12, 8), HAIR2, sx * 0.42, -0.78, 0.14, H);
-  mesh(sph(0.09, 12, 8), HAIR, sx * 0.38, -0.95, 0.18, H);
-}
-ol(mesh(sph(0.2, 16, 10), HAIR, -0.17, 0.29, 0.29, { ...H, s: [1.45, 0.55, 0.62], r: [0.35, 0, 0.42] }));     // franja
-mesh(sph(0.18, 16, 10), HAIRL, 0.02, 0.35, 0.3, { ...H, s: [1.4, 0.45, 0.55], r: [0.4, 0, 0.18] });
-mesh(sph(0.15, 16, 10), HAIR, 0.2, 0.27, 0.3, { ...H, s: [1.2, 0.5, 0.55], r: [0.35, 0, -0.15] });
-mesh(sph(0.12, 12, 8), HAIRL, 0.12, 0.42, 0.05, { ...H, s: [1.6, 0.4, 1], r: [-0.3, 0, -0.2] });               // brilho
-// rosto: olhos grandes castanhos com cílios, sobrancelhas marcantes, sorriso
-const mEyes = [], mBrows = [];
-const DARK = '#2a160b';
-for (const sx of [-1, 1]) {
-  const e = group(sx * 0.155, 0.0, 0.355, head);
-  mesh(sph(0.092, 16, 12), '#ffffff', 0, 0, 0, { p: e, s: [1, 1.2, 0.45], cast: false });
-  mesh(sph(0.07, 16, 12), '#7a4524', 0, -0.008, 0.024, { p: e, s: [1, 1.12, 0.45], cast: false });
-  mesh(sph(0.042, 12, 8), '#a3693c', 0, -0.03, 0.04, { p: e, s: [1, 0.9, 0.35], cast: false });
-  mesh(sph(0.036, 12, 8), DARK, 0, 0, 0.05, { p: e, s: [1, 1.1, 0.5], cast: false });
-  mesh(sph(0.021, 8, 6), '#ffffff', 0.026, 0.038, 0.07, { p: e, cast: false });
-  mesh(sph(0.01, 6, 4), '#ffffff', -0.022, -0.03, 0.07, { p: e, cast: false });
-  mesh(new THREE.TorusGeometry(0.092, 0.013, 6, 18, Math.PI), DARK, 0, 0.012, 0.028, { p: e, s: [1, 1.2, 1], cast: false }); // pálpebra
-  for (let l = 0; l < 3; l++) mesh(box(0.012, 0.045, 0.01), DARK, sx * (0.07 + l * 0.018), 0.085 - l * 0.02, 0.03, { p: e, r: [0, 0, -sx * (0.5 + l * 0.35)], cast: false });
-  mEyes.push(e);
-  mBrows.push(mesh(cap(0.019, 0.1), '#3b2416', sx * 0.155, 0.175, 0.375, { ...H, r: [0, 0, Math.PI / 2 - sx * 0.12], cast: false }));
-  mesh(sph(0.065, 12, 8), '#f3a1a0', sx * 0.26, -0.12, 0.3, { ...H, s: [1.3, 0.65, 0.3], cast: false });
-  mesh(sph(0.07, 10, 8), SKIN2, sx * 0.41, -0.03, 0.0, H);                                                          // orelhas
-}
-mesh(sph(0.028, 10, 8), '#efbf9f', 0, -0.075, 0.41, { ...H, s: [1, 0.8, 1], cast: false });
-const smile = mesh(new THREE.TorusGeometry(0.065, 0.014, 8, 20, Math.PI), '#b5485a', 0, -0.17, 0.375, { ...H, r: [-0.15, 0, Math.PI], cast: false });
-mesh(sph(0.03, 10, 8), '#e98a95', 0, -0.205, 0.37, { ...H, s: [1.3, 0.5, 0.5], cast: false });
+// Modelo do Blender (blender/maria.py). As partes animadas começam vazias, para o jogo
+// rodar enquanto o arquivo carrega, e viram as peças do maria.glb quando ele chega.
+const nada = () => new THREE.Object3D();
+let legs = [nada(), nada()], armL = nada(), armR = nada(), mCan = nada(), spout = nada(), head = nada(), smile = nada();
+let mEyes = [], mBrows = [];
+new GLTFLoader().load('modelos/maria.glb', gltf => {
+  const q = n => gltf.scene.getObjectByName(n);
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  legs = [q('maria_perna_L'), q('maria_perna_R')];
+  armL = q('maria_braco_L'); armR = q('maria_braco_R');
+  armL.rotation.z = -0.22; armR.rotation.z = 0.22;
+  mCan = q('maria_regador'); spout = q('maria_bico'); mCan.visible = false;
+  head = q('maria_cabeca'); smile = q('maria_sorriso');
+  mEyes = [q('maria_olho_L'), q('maria_olho_R')];
+  mBrows = [q('maria_sobrancelha_L'), q('maria_sobrancelha_R')];
+  maria.add(gltf.scene);
+}, undefined, e => console.error('[3D] a Maria Alice não carregou:', e));
 
 // ================= JADE (baseada na foto PERSONAGENS.jpg) =================
 // Corpo e cabeça são UMA malha lisa (formato de pãozinho, como um porquinho-da-índia),
@@ -276,7 +210,7 @@ function jadeBodyGeo() {
   geo.computeVertexNormals();
   return geo;
 }
-const jadeMat = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: grad });
+const jadeMat = PBR({ color: '#ffffff', vertexColors: true });
 ol(mesh(jadeBodyGeo(), jadeMat, 0, 0, 0, J));
 const jHead = group(0, 0, 0, jBody);   // traços do rosto (o corpo já inclui a cabeça)
 const JH = { p: jHead };
@@ -322,6 +256,19 @@ mesh(cyl(0.012, 0.015, 0.18), '#4aa3df', 0, 0.02, 0.1, { p: jCan, r: [1.0, 0, 0]
 jCan.visible = false;
 const zzz = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('z z z', null, '#6b7fa6', 256, 96, 64), transparent: true }));
 zzz.scale.set(0.5, 0.19, 1); zzz.position.set(0.25, 0.85, 0.2); jade.add(zzz);
+
+// ================= FLORZINHA (modelo do Blender: blender/florzinha.py) =================
+// O .glb traz as partes com nome e os materiais do Blender; aqui só ligamos a sombra e o loop anima.
+const flor = group(-2.4, 0, 1.45);
+flor.rotation.y = 0.45;
+flor.scale.setScalar(1.15);
+const FLOR = {};      // partes animadas (vazio até o modelo chegar: o jogo roda sem ele)
+let florLate = 0;     // segundos de latido que faltam
+new GLTFLoader().load('modelos/florzinha.glb', gltf => {
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  flor.add(gltf.scene);
+  for (const n of ['flor_corpo', 'flor_cabeca', 'flor_rabo', 'flor_olho_L', 'flor_olho_R', 'flor_boca']) FLOR[n] = gltf.scene.getObjectByName(n);
+}, undefined, e => console.error('[3D] a Florzinha não carregou:', e));
 
 // ================= CLIENTES =================
 const SLOTS = [V(-0.7, 0, 1.3), V(0.9, 0, 1.35), V(2.5, 0, 1.3), V(4.0, 0, 1.4)];
@@ -403,7 +350,7 @@ const LAYER = {
   cenoura_r: ['#f28a1c', 0.035, 0.4], queijo: ['#f9d95e', 0.03, 0.48], molho: ['#f4efe0', 0.025, 0.38],
 };
 const ITEM_COLOR = { alface: '#5fb548', tomate_f: '#e5412f', cenoura_r: '#f28a1c', queijo: '#f9d95e', molho: '#f4efe0' };
-const jarMat = new THREE.MeshToonMaterial({ color: '#dff4ff', gradientMap: grad, transparent: true, opacity: 0.4 });
+const jarMat = PBR({ color: '#dff4ff', roughness: 0.05, transparent: true, opacity: 0.35 }); // vidro
 let jarContents = null;
 
 function buildDish(c) {
@@ -650,12 +597,13 @@ document.getElementById('stage').addEventListener('click', e => {
   const rc = renderer.domElement.getBoundingClientRect();
   ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const targets = [jade, ...[...custs.values()].map(c => c.g)];
+  const targets = [jade, flor, ...[...custs.values()].map(c => c.g)];
   const hit = ray.intersectObjects(targets, true)[0];
   if (!hit) return;
   let o = hit.object;
   while (o.parent && !targets.includes(o)) o = o.parent;
   if (o === jade) { if (jadeHop <= 0) { jadeHop = 1; SFX.wheek(3); } return; }
+  if (o === flor) { if (florLate <= 0) { florLate = 1.2; floatText('AU! AU!', flor.position.clone().add(V(0, 1.35, 0))); } return; }
   for (const [id, c] of custs) if (c.g === o) {
     const cu = G.cust(id);
     if (cu && cu.state === 'chegou') G.takeOrder(id);
@@ -849,8 +797,8 @@ function loop(now) {
   if (blinkT < 0) blinkT = 2.5 + Math.random() * 2.5;
   const worried = inGame && G.run.customers.some(c => c.patience / c.maxPatience < 0.33);
   // sobrancelhas: levemente arqueadas; preocupada, sobem no meio
-  mBrows.forEach((b, i) => { const sx = i ? 1 : -1; b.rotation.z = Math.PI / 2 - sx * (worried ? -0.3 : 0.12); });
-  smile.rotation.z = worried ? 0 : Math.PI;
+  mBrows.forEach((b, i) => { const sx = i ? 1 : -1; b.rotation.z = worried ? sx * 0.3 : 0; });
+  smile.rotation.z = worried ? Math.PI : 0;   // o modelo vem sorrindo (∪); preocupada vira ∩
 
   // Maria anda até a estação escolhida
   if (station !== mariaStation) {
@@ -923,6 +871,18 @@ function loop(now) {
     if (jadeHop > 0) { jadeHop -= dt * 1.6; jBody.position.y = Math.max(0, Math.sin((1 - jadeHop) * Math.PI)) * 0.28; }
     else { jBody.position.y = 0; if (helping && Math.sin(t * 0.9) > 0.995) jadeHop = 1; } // pulinho de alegria de vez em quando
   }
+  // Florzinha: respira, abana o rabo, inclina a cabeça, pisca; ao tocar, late
+  if (FLOR.flor_cabeca) {
+    florLate = Math.max(0, florLate - dt);
+    const au = florLate > 0 ? Math.abs(Math.sin(florLate * 14)) : 0;
+    FLOR.flor_corpo.scale.y = 1 + Math.sin(t * 2.2) * 0.015;
+    FLOR.flor_rabo.rotation.z = Math.sin(t * (florLate > 0 ? 18 : 7)) * 0.35;
+    FLOR.flor_cabeca.rotation.z = florLate > 0 ? 0 : Math.sin(t * 0.6) * 0.12;
+    FLOR.flor_cabeca.rotation.x = -au * 0.25;   // ergue a cabeça a cada "au"
+    FLOR.flor_boca.scale.y = 1 + au * 2.5;
+    for (const e of [FLOR.flor_olho_L, FLOR.flor_olho_R]) e.scale.y = blinkT < 0.12 ? 0.15 : 1;
+  }
+
   const acc = inGame ? G.s.acessorio : null;
   for (const [k2, g] of Object.entries(ACC)) g.visible = acc === k2;
 
@@ -975,8 +935,8 @@ function loop(now) {
       pa.needsUpdate = true;
     }
     const dark = r.ev.luz > 0 ? 0.3 : r.ev.chuva > 0 ? 0.7 : 1;
-    sun.intensity += (2.4 * dark - sun.intensity) * k;
-    hemi.intensity += (1.7 * (dark < 1 ? 0.55 + dark * 0.45 : 1) - hemi.intensity) * k;
+    sun.intensity += (SUN0 * dark - sun.intensity) * k;
+    hemi.intensity += (HEMI0 * (dark < 1 ? 0.55 + dark * 0.45 : 1) - hemi.intensity) * k;
     scene.background.set(r.ev.chuva > 0 ? '#9fb3c6' : r.ev.luz > 0 ? '#8296b0' : '#bfe6ff');
     dirty.visible = r.pratos !== null && r.pratos <= 1;
     puddle.visible = !!G.s.irrigQuebrada;

@@ -42,6 +42,13 @@
 <script src="../js/game.js"></script>
 <script src="../js/events.js"></script>
 <script src="../js/ui.js"></script>
+<!-- 'three' e 'three/addons/' apontam para a MESMA cópia do three.js (o GLTFLoader importa 'three') -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
 <script type="module" src="world.js"></script>
 </body>
 </html>
