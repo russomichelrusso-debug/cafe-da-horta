@@ -36,7 +36,7 @@ const G = {
       ],
       jade: { fome: 70, alegria: 70 },
       flor: { peso: 45 },   // Florzinha: peso alto = veterinário no fim do dia
-      up: {}, acessorios: [], acessorio: null,
+      up: {}, acessorios: [], acessorio: null, florAcessorios: [], florAcessorio: null,
       faca: 100, aduboDias: 0, irrigQuebrada: false,
       eventBag: [], lastEvent: null,
     };
@@ -67,19 +67,21 @@ const G = {
     this.save();
   },
 
-  // Comprar ou vestir/tirar um acessório da Jade
-  tapAcessorio(id) {
-    const a = ACESSORIOS.find(x => x.id === id);
+  // Comprar ou vestir/tirar um acessório da Jade (dono 'jade') ou da Florzinha (dono 'flor')
+  tapAcessorio(id, dono = 'jade') {
+    const flor = dono === 'flor';
+    const a = (flor ? ACESSORIOS_FLOR : ACESSORIOS).find(x => x.id === id);
+    const tem = flor ? 'florAcessorios' : 'acessorios', veste = flor ? 'florAcessorio' : 'acessorio';
     if (!a) return;
-    if (!this.s.acessorios.includes(id)) {
+    if (!this.s[tem].includes(id)) {
       if (this.s.coins < a.preco) { UI.toast('Moedas insuficientes!'); SFX.bad(); return; }
       this.s.coins -= a.preco;
-      this.s.acessorios.push(id);
-      this.s.acessorio = id;
+      this.s[tem].push(id);
+      this.s[veste] = id;
       SFX.coin();
     } else {
-      this.s.acessorio = this.s.acessorio === id ? null : id;
-      SFX.wheek(1);
+      this.s[veste] = this.s[veste] === id ? null : id;
+      if (flor) SFX.tap(); else SFX.wheek(1);
     }
     this.save();
   },
@@ -95,7 +97,7 @@ const G = {
     this.s = (continuar && this.load()) || this.newState();
     // saves de versões antigas não têm estes campos
     const def = this.newState();
-    for (const k of ['up', 'acessorios', 'acessorio', 'velho', 'faca', 'aduboDias', 'irrigQuebrada', 'eventBag', 'lastEvent', 'flor']) {
+    for (const k of ['up', 'acessorios', 'acessorio', 'velho', 'faca', 'aduboDias', 'irrigQuebrada', 'eventBag', 'lastEvent', 'flor', 'florAcessorios', 'florAcessorio']) {
       if (this.s[k] === undefined) this.s[k] = def[k];
     }
     if (this.s.up.adubo) { delete this.s.up.adubo; this.s.aduboDias = 3; } // adubo virou item do mercado

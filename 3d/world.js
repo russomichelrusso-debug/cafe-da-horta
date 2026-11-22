@@ -183,7 +183,7 @@ let florLate = 0, florAuT = 0;   // latido só de enfeite (fora do jogo) e inter
 new GLTFLoader().load('modelos/florzinha.glb', gltf => {
   gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = fazSombra(o); o.receiveShadow = true; } });
   flor.add(gltf.scene);
-  for (const n of ['flor_corpo', 'flor_cabeca', 'flor_rabo', 'flor_olho_L', 'flor_olho_R', 'flor_boca']) FLOR[n] = gltf.scene.getObjectByName(n);
+  for (const n of ['flor_corpo', 'flor_cabeca', 'flor_rabo', 'flor_olho_L', 'flor_olho_R', 'flor_boca', 'flor_acc_laco', 'flor_acc_bandana', 'flor_acc_coroa']) FLOR[n] = gltf.scene.getObjectByName(n);
 }, undefined, e => console.error('[3D] a Florzinha não carregou:', e));
 
 // ================= CLIENTES =================
@@ -839,6 +839,7 @@ function loop(now) {
     FLOR.flor_cabeca.rotation.x = -au * 0.25 - (pede ? 0.2 : 0);   // ergue a cabeça a cada "au" e quando pede
     FLOR.flor_boca.scale.y = 1 + au * 2.5 + (pede ? 0.8 : 0);
     for (const e of [FLOR.flor_olho_L, FLOR.flor_olho_R]) e.scale.y = blinkT < 0.12 ? 0.15 : 1;
+    for (const a of ['laco', 'bandana', 'coroa']) FLOR['flor_acc_' + a].visible = !!G.s && G.s.florAcessorio === a;   // acessório da loja
   }
 
   const acc = inGame ? G.s.acessorio : null;

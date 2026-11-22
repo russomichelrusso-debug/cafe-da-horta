@@ -430,3 +430,11 @@ button:disabled { opacity: .45; cursor: default; }
 /* Florzinha na loja (aba Animais) */
 .up-card.flor-shop { background: #fff7ea; box-shadow: none; border: 2px dashed #e0c49a; }
 .flor-shop-art svg { width: 62px; height: 66px; display: block; }
+.acc-flor svg { width: 60px; height: 64px; display: block; margin: 0 auto; }
+.acc-duo { display: flex; gap: 14px; flex-shrink: 0; }   /* acessórios da Jade e da Florzinha lado a lado (sem rolar) */
+.acc-duo .acc-row { flex: 1; min-width: 0; gap: 5px; }
+.acc-duo .acc-jade { width: 58px; } .acc-duo .acc-jade svg { width: 58px; height: 40px; }
+.acc-duo .acc-flor svg { width: 44px; height: 47px; }
+.acc-duo .acc { padding: 5px 6px; column-gap: 4px; min-width: 0; }
+.acc-duo .acc span { font-size: 20px; } .acc-duo .acc b { font-size: 12px; line-height: 1.1; } .acc-duo .acc small { font-size: 11px; }
+.shop-box { touch-action: pan-y; }

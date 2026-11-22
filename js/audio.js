@@ -124,58 +124,10 @@ const SFX = {
   squeak() { this.wheek(2); },
   harvest(){ this.tone(523, 0.08, 'triangle', 0.1); this.tone(784, 0.12, 'triangle', 0.1, 0, 0.07); },
   water()  { this.tone(300, 0.2, 'sine', 0.08, 300); },
-  // ===== Florzinha (cachorrinha pequena), sintetizada até termos gravações dela =====
-  // "au" de cachorrinho (medido num latido de Shih Tzu): ~100 ms, tom ~800 Hz quase reto,
-  // energia perto de 1.200 Hz; voz (dente de serra filtrada) + um pouco de ar (ruído)
-  yap(t, vol = 0.22) {
-    const c = this.ctx, f0 = 760 + Math.random() * 100, dur = 0.09 + Math.random() * 0.025;
-    const out = c.createGain();
-    out.gain.setValueAtTime(0.0001, t);
-    out.gain.exponentialRampToValueAtTime(vol, t + 0.006);
-    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    const boca = c.createBiquadFilter();          // ressonância da boca ("formante")
-    boca.type = 'bandpass'; boca.Q.value = 1.6;
-    boca.frequency.setValueAtTime(1350, t);
-    boca.frequency.exponentialRampToValueAtTime(1100, t + dur);
-    boca.connect(out).connect(c.destination);
-    const o = c.createOscillator();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.exponentialRampToValueAtTime(f0 * 0.92, t + dur);   // cai só um pouquinho
-    o.connect(boca);
-    const ar = c.createBufferSource(), arG = c.createGain();
-    ar.buffer = this.noiseBuf(); arG.gain.value = 0.35;
-    ar.connect(arG).connect(boca);
-    o.start(t); o.stop(t + dur + 0.02);
-    ar.start(t, Math.random() * 0.5); ar.stop(t + dur + 0.02);
-  },
-  au(n = 2, delay = 0) {   // latido da Florzinha: latidos espaçados e irregulares, como um cachorro de verdade
-    if (this.muted || !this.ctx) return;
-    let t = this.ctx.currentTime + delay;
-    for (let i = 0; i < n; i++) { this.yap(t); t += 0.45 + Math.random() * 0.4; }
-  },
-  // chorinho de "me dá comida": assobio nasal que sobe e desce, com tremidinho
-  choro(delay = 0) {
-    if (this.muted || !this.ctx) return;
-    const c = this.ctx, t = c.currentTime + delay, dur = 0.7;
-    const out = c.createGain();
-    out.gain.setValueAtTime(0.0001, t);
-    out.gain.exponentialRampToValueAtTime(0.09, t + 0.08);
-    out.gain.setValueAtTime(0.09, t + dur * 0.7);
-    out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    const nariz = c.createBiquadFilter();
-    nariz.type = 'bandpass'; nariz.frequency.value = 1500; nariz.Q.value = 3;
-    nariz.connect(out).connect(c.destination);
-    const o = c.createOscillator(), lfo = c.createOscillator(), lfoG = c.createGain();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(1050, t);
-    o.frequency.linearRampToValueAtTime(1400, t + dur * 0.4);
-    o.frequency.linearRampToValueAtTime(900, t + dur);
-    lfo.frequency.value = 7; lfoG.gain.value = 35;
-    lfo.connect(lfoG).connect(o.frequency);
-    o.connect(nariz);
-    o.start(t); o.stop(t + dur); lfo.start(t); lfo.stop(t + dur);
-  },
+  // ===== Florzinha: gravações reais (Pixabay); se ainda não carregou, fica em silêncio (sintetizado soava artificial)
+  // flor-latido já tem 2 latidos; n >= 3 repete o trecho mais uma vez
+  au(n = 2, delay = 0) { this.play('flor-latido', 0.9, this.vary(), delay); if (n >= 3) this.play('flor-latido', 0.8, this.vary(), delay + 1.1); },
+  choro(delay = 0) { this.play('flor-choro', 0.8, 1, delay); },
   plim()   { this.tone(1568, 0.12, 'sine', 0.1); this.tone(2093, 0.22, 'sine', 0.08, 0, 0.1); },   // pedido de delivery no app
   alarm()  { this.tone(880, 0.14, 'square', 0.07); this.tone(660, 0.14, 'square', 0.07, 0, 0.16); this.tone(880, 0.14, 'square', 0.07, 0, 0.32); },
   blendTick(){ this.tone(90 + Math.random() * 30, 0.05, 'sawtooth', 0.03); },
@@ -190,7 +142,8 @@ Object.assign(SFX, {
   buffers: {},
   loading: false,
   FILES: ['jade-uii-1', 'jade-uii-2', 'jade-uii-3', 'jade-ronrona', 'jade-resmunga', 'jade-gorjeio',
-    'toque', 'soltar', 'erro', 'colher', 'alerta', 'confirma', 'faca-1', 'faca-2', 'faca-3', 'sino', 'moedas-1', 'moedas-2'],
+    'toque', 'soltar', 'erro', 'colher', 'alerta', 'confirma', 'faca-1', 'faca-2', 'faca-3', 'sino', 'moedas-1', 'moedas-2',
+    'flor-latido', 'flor-choro'],
   load() {
     if (this.loading || !this.ctx) return;
     this.loading = true;

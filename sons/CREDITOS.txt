@@ -8,6 +8,10 @@ Jade (porquinho-da-índia) — gravações reais, Wikimedia Commons, DOMÍNIO P�
   jade-resmunga.mp3   <- Guinea_Pig_Keep_Away.ogg      https://commons.wikimedia.org/wiki/File:Guinea_Pig_Keep_Away.ogg
   jade-gorjeio.mp3    <- Guinea_Pig_Chirping.ogg       https://commons.wikimedia.org/wiki/File:Guinea_Pig_Chirping.ogg
 
+Florzinha (cachorrinha) — gravações reais do Pixabay (Pixabay Content License: uso livre em jogos, sem crédito obrigatório)
+  flor-latido.mp3  <- trecho de "growling_dog" (magiaz, Pixabay 410233)
+  flor-choro.mp3   <- trecho de "dog_cry" (magiaz, Pixabay 385758)
+
 Efeitos — Kenney (www.kenney.nl), licença CC0 (Creative Commons Zero)
   Interface Sounds: toque (select_001), soltar (drop_002), erro (error_004),
                     colher (pluck_002), alerta (question_003), confirma (confirmation_001)

@@ -1,6 +1,6 @@
 'use strict';
 // ===== Dados do jogo: ingredientes, receitas, horta, mercado =====
-const VERSAO = '1.17'; // aparece na tela inicial (para saber qual versão está rodando)
+const VERSAO = '1.18'; // aparece na tela inicial (para saber qual versão está rodando)
 
 const ING = {
   pao:       { nome: 'Pão' },
@@ -112,6 +112,11 @@ const ACESSORIOS = [
   { id: 'lacinho',  em: '🎀', nome: 'Lacinho',        preco: 25 },
   { id: 'chapeu',   em: '👨‍🍳', nome: 'Chapéu de chef', preco: 35 },
   { id: 'cachecol', em: '🧣', nome: 'Cachecol',       preco: 30 },
+];
+const ACESSORIOS_FLOR = [
+  { id: 'laco',    em: '🎀', nome: 'Laço no topete',  preco: 25 },
+  { id: 'bandana', em: '🧣', nome: 'Bandana',         preco: 30 },
+  { id: 'coroa',   em: '🌸', nome: 'Coroa de flores', preco: 35 },
 ];
 
 // Dificuldade cresce a cada dia (modo desafio)

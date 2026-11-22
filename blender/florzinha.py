@@ -71,5 +71,54 @@ boca = bolhas('flor_boca', [((0, -0.278, 0.552), (0.035, 0.02, 0.01))], '#6b2a2a
 bolhas('flor_lingua', [((0, -0.288, 0.545), (0.018, 0.012, 0.01))], '#f07c8a',
        pivo=(0, -0.288, 0.545), pai=boca, voxel=0, seg=(12, 6))
 
+# ---- acessórios da loja (o jogo mostra só o que estiver vestido): flor_acc_laco / flor_acc_bandana / flor_acc_coroa ----
+laco = bolhas('flor_acc_laco', [((0, -0.07, 0.9), 0.026)], '#e0457f', pivo=(0, -0.07, 0.9), pai=cab, voxel=0, rug=0.5, seg=(12, 6))
+bolhas('flor_acc_laco_abas', [((sx * 0.055, -0.07, 0.9), (0.055, 0.022, 0.04), (0, sx * 15, 0)) for sx in (-1, 1)],
+       '#ff6fa5', pivo=(0, -0.07, 0.9), pai=laco, voxel=0.006, suave=4, alvo=700, rug=0.5)
+# bandana triangular no peito, na frente da coleira (cobre a florzinha)
+band = bolhas('flor_acc_bandana', [((0, -0.235, 0.425), (0.145, 0.03, 0.045), (-15, 0, 0)),
+                                   ((0, -0.24, 0.38), (0.095, 0.028, 0.045), (-15, 0, 0)),
+                                   ((0, -0.24, 0.335), (0.045, 0.025, 0.035), (-15, 0, 0))],
+              '#d1495b', pivo=(0, -0.235, 0.425), pai=corpo, voxel=0.006, suave=3, alvo=900, rug=0.9)
+bolhas('flor_acc_bandana_bolinhas', [((x, -0.268, z), (0.011, 0.004, 0.011), (-15, 0, 0))
+                                     for x, z in ((-0.09, 0.43), (-0.03, 0.435), (0.03, 0.435), (0.09, 0.43), (-0.05, 0.385), (0.05, 0.385), (0, 0.345))],
+       '#ffffff', pivo=(0, -0.235, 0.425), pai=band, voxel=0, seg=(8, 4))
+# coroa de flores encostada no topete, com as flores viradas para fora
+from mathutils import Vector
+coroa = anel('flor_acc_coroa', (0, -0.05, 0.77), 0.19, 0.011, '#5fb548', rot=(-12, 0, 0), pai=cab)
+def no_aro(a, z=0.77):
+    r = math.radians(a)
+    return (0.19 * math.cos(r), -0.05 + 0.19 * math.sin(r), z - 0.04 * math.sin(r))
+def virada(a):
+    r = math.radians(a)
+    e = Vector((math.cos(r), math.sin(r), 0.8)).to_track_quat('Z', 'Y').to_euler()
+    return tuple(math.degrees(v) for v in e)
+for k, cor in enumerate(('#ff8fb8', '#ffd34d', '#ffffff')):
+    bolhas(f'flor_acc_coroa_flores_{k}', [(no_aro(a), (0.045, 0.045, 0.014), virada(a)) for i, a in enumerate(range(0, 360, 36)) if i % 3 == k],
+           cor, pivo=(0, -0.05, 0.77), pai=coroa, voxel=0, seg=(14, 5), rug=0.6)
+bolhas('flor_acc_coroa_miolos', [(tuple(p + 0.012 * d for p, d in zip(no_aro(a), (math.cos(math.radians(a)), math.sin(math.radians(a)), 0.8))), 0.014)
+                                 for a in range(0, 360, 36)], '#f28a1c', pivo=(0, -0.05, 0.77), pai=coroa, voxel=0, seg=(8, 4))
+
 exportar('florzinha.glb')
+# prévias: uma com cada acessório (os outros escondidos)
+ACC = {'laco': [laco], 'bandana': [band], 'coroa': [coroa]}
+def vestir(qual):
+    for nome, obs in ACC.items():
+        for ob in obs:
+            for o in [ob] + list(ob.children_recursive):
+                o.hide_render = nome != qual
+vestir(None)
 previas('florzinha', pasta_previas(), alvo=(0, 0, 0.42), dist=2.1)
+pasta = pasta_previas()
+if pasta:
+    import bpy
+    sc = bpy.context.scene
+    cam = sc.camera
+    from mathutils import Vector
+    al = Vector((0, -0.05, 0.6))
+    cam.location = al + Vector((0.45, -1.15, 0.45))
+    cam.rotation_euler = (al - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    for qual in ACC:
+        vestir(qual)
+        sc.render.filepath = os.path.join(pasta, f'florzinha-acc-{qual}.png')
+        bpy.ops.render.render(write_still=True)

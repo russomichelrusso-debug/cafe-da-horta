@@ -134,13 +134,15 @@ const UI = {
     // miniatura da Florzinha no espaço que sobra ao lado das melhorias dela
     const flor = tab !== 'jade' ? '' : `<div class="up-card flor-shop"><div class="flor-shop-art">${florSVG('feliz')}</div>
       <div class="up-txt"><b>Florzinha</b><small>⚖️ Peso ${Math.round(s.flor.peso)}%${s.flor.peso >= 60 ? ' · gordinha!' : ''}</small></div></div>`;
-    const accs = tab !== 'jade' ? '' : `<div class="acc-row">
-      <div class="acc-jade">${jadeSVG('feliz')}</div>
-      ${ACESSORIOS.map(a => {
-        const own = s.acessorios.includes(a.id), on = s.acessorio === a.id;
-        return `<button class="acc ${on ? 'on' : ''}" data-act="acc" data-arg="${a.id}" ${!own && s.coins < a.preco ? 'disabled' : ''}>
+    // uma fileira de acessórios por animal: miniatura + os acessórios (comprar uma vez, depois vestir/tirar)
+    const fileira = (arte, lista, tem, veste, act) => `<div class="acc-row"><div class="acc-jade">${arte}</div>
+      ${lista.map(a => {
+        const own = s[tem].includes(a.id), on = s[veste] === a.id;
+        return `<button class="acc ${on ? 'on' : ''}" data-act="${act}" data-arg="${a.id}" ${!own && s.coins < a.preco ? 'disabled' : ''}>
           <span>${a.em}</span><b>${a.nome}</b><small>${own ? (on ? 'Vestindo · tirar' : 'Vestir') : '🪙 ' + a.preco}</small></button>`;
       }).join('')}</div>`;
+    const accs = tab !== 'jade' ? '' : '<div class="acc-duo">' + fileira(jadeSVG('feliz'), ACESSORIOS, 'acessorios', 'acessorio', 'acc')
+      + fileira(`<span class="acc-flor">${florSVG('feliz')}</span>`, ACESSORIOS_FLOR, 'florAcessorios', 'florAcessorio', 'accflor') + '</div>';
     this.el.overlay.className = 'shop';
     this.el.overlay.innerHTML = `
       <div class="shop-box">
@@ -629,6 +631,7 @@ const ACTIONS = {
   shopback() { UI.showNight(); SFX.tap(); },
   upgrade(id) { G.buyUpgrade(id); UI.showShop(); },
   acc(id) { G.tapAcessorio(id); UI.showShop(); },
+  accflor(id) { G.tapAcessorio(id, 'flor'); UI.showShop(); },
   mute() { SFX.muted = !SFX.muted; UI.dirty = true; },
   quit() {
     UI.confirm('Sair para o menu?',

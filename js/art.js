@@ -135,8 +135,26 @@ function jadeSVG(expr = 'feliz', acc = (typeof G !== 'undefined' && G.s) ? G.s.a
 }
 
 // ----- Florzinha: cachorrinha branca e gordinha, coleira rosa com florzinha (opção A dos mockups) -----
-// expr: 'feliz' | 'pedindo' | 'latindo' | 'comendo' | 'sono'
-function florSVG(expr = 'feliz') {
+// Acessórios da Florzinha (coordenadas do viewBox 200x212); o laço e a coroa ficam na cabeça e mexem com ela
+const FLOR_ACC = {
+  laco: `<g transform="translate(100 18)">
+    <path d="M0 0L-22 -13L-20 13Z" fill="#ff6fa5"/><path d="M0 0L22 -13L20 13Z" fill="#ff6fa5"/>
+    <path d="M-15 -6L-19 6M15 -6L19 6" stroke="#e0457f" stroke-width="2" stroke-linecap="round"/>
+    <circle r="6.5" fill="#e0457f"/></g>`,
+  coroa: [200, 222, 245, 270, 295, 318, 340].map((a, i) => {
+    const x = 100 + 54 * Math.cos(a * Math.PI / 180), y = 66 + 46 * Math.sin(a * Math.PI / 180);
+    const cor = ['#ff8fb8', '#ffd34d', '#ffffff'][i % 3];
+    return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><ellipse cx="-7" cy="3" rx="5" ry="2.5" fill="#5fb548" transform="rotate(-30 -7 3)"/>
+      <g fill="${cor}" stroke="#e9b6c6" stroke-width=".8"><circle cy="-5" r="4.2"/><circle cx="4.8" cy="-1.5" r="4.2"/><circle cx="3" cy="4.2" r="4.2"/><circle cx="-3" cy="4.2" r="4.2"/><circle cx="-4.8" cy="-1.5" r="4.2"/></g>
+      <circle r="2.8" fill="#f28a1c"/></g>`;
+  }).join(''),
+  bandana: `<path d="M58 122Q100 142 142 122L136 132Q118 166 100 176Q82 166 64 132Z" fill="#d1495b"/>
+    <g fill="#fff" opacity=".85"><circle cx="86" cy="140" r="3"/><circle cx="106" cy="138" r="3"/><circle cx="124" cy="134" r="2.6"/><circle cx="96" cy="156" r="3"/><circle cx="114" cy="152" r="2.6"/><circle cx="76" cy="132" r="2.4"/><circle cx="102" cy="168" r="2.2"/></g>
+    <path d="M58 122Q100 142 142 122" stroke="#a8384b" stroke-width="5" fill="none" stroke-linecap="round"/>`,
+};
+
+// expr: 'feliz' | 'pedindo' | 'latindo' | 'comendo' | 'sono'; acc: acessório vestido (padrão: o do save)
+function florSVG(expr = 'feliz', acc = (typeof G !== 'undefined' && G.s) ? G.s.florAcessorio : null) {
   const C = '#fbf5e6', SOMBRA = '#ece0c6', CLARO = '#fffdf7', OLHO = '#1d120b';
   const olhos = {
     feliz:   `<circle cx="78" cy="74" r="8.5" fill="${OLHO}"/><circle cx="81" cy="70.5" r="2.8" fill="#fff"/>
@@ -176,9 +194,11 @@ function florSVG(expr = 'feliz') {
       <ellipse cx="62" cy="94" rx="8" ry="4.5" fill="#f3a1a0" opacity=".6"/><ellipse cx="138" cy="94" rx="8" ry="4.5" fill="#f3a1a0" opacity=".6"/>
       <path d="M91 90Q100 84 109 90Q107 99 100 100Q93 99 91 90Z" fill="${OLHO}"/><ellipse cx="96" cy="89" rx="3" ry="1.6" fill="#fff" opacity=".7"/>
       ${boca}
+      ${acc === 'laco' || acc === 'coroa' ? FLOR_ACC[acc] : ''}
     </g>
     <path d="M62 124Q100 142 138 124" stroke="#ff6fa5" stroke-width="9" fill="none" stroke-linecap="round"/>
     <g transform="translate(100 138)"><g fill="#ffd34d"><circle cy="-7" r="5"/><circle cx="6.7" cy="-2.2" r="5"/><circle cx="4.1" cy="5.7" r="5"/><circle cx="-4.1" cy="5.7" r="5"/><circle cx="-6.7" cy="-2.2" r="5"/></g><circle r="4" fill="#f28a1c"/></g>
+    ${acc === 'bandana' ? FLOR_ACC.bandana : ''}
   </svg>`;
 }
 
